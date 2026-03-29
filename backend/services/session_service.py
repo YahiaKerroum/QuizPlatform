@@ -26,6 +26,14 @@ def _normalize_choice(choice: str) -> str:
     return normalized
 
 
+def _choice_text(question: Question, choice: str) -> str | None:
+    return getattr(question, f"choice_{choice}", None)
+
+
+def _choice_image_url(question: Question, choice: str) -> str | None:
+    return getattr(question, f"choice_{choice}_image_url", None)
+
+
 async def _get_session_for_student(
     db: AsyncSession,
     session_id: UUID,
@@ -146,14 +154,7 @@ async def get_result(db: AsyncSession, session_id: UUID, student: Student) -> Re
         )
 
     result = await db.execute(
-        select(
-            Answer.question_number,
-            Answer.chosen_answer,
-            Answer.is_correct,
-            Answer.response_time_ms,
-            Answer.answered_at,
-            Question.difficulty,
-        )
+        select(Answer, Question)
         .join(
             Question,
             and_(
@@ -167,26 +168,33 @@ async def get_result(db: AsyncSession, session_id: UUID, student: Student) -> Re
     rows = result.all()
 
     total = len(rows)
-    correct = sum(1 for row in rows if row.is_correct)
+    correct = sum(1 for answer, _question in rows if answer.is_correct)
     accuracy = (correct / total) if total else 0.0
 
     by_difficulty_raw: dict[str, dict[str, int]] = defaultdict(lambda: {"total": 0, "correct": 0})
     by_question: list[QuestionResultOut] = []
 
-    for row in rows:
-        difficulty_key = row.difficulty or "unassigned"
+    for answer, question in rows:
+        difficulty_key = question.difficulty or "unassigned"
         by_difficulty_raw[difficulty_key]["total"] += 1
-        if row.is_correct:
+        if answer.is_correct:
             by_difficulty_raw[difficulty_key]["correct"] += 1
 
         by_question.append(
             QuestionResultOut(
-                question_number=row.question_number,
-                chosen_answer=row.chosen_answer,
-                is_correct=row.is_correct,
-                response_time_ms=row.response_time_ms,
-                difficulty=row.difficulty,
-                answered_at=row.answered_at,
+                question_number=answer.question_number,
+                question_text=question.question_text,
+                question_image_url=question.question_image_url,
+                chosen_answer=answer.chosen_answer,
+                correct_answer=question.correct_answer,
+                chosen_answer_text=_choice_text(question, answer.chosen_answer),
+                chosen_answer_image_url=_choice_image_url(question, answer.chosen_answer),
+                correct_answer_text=_choice_text(question, question.correct_answer) or question.correct_answer.upper(),
+                correct_answer_image_url=_choice_image_url(question, question.correct_answer),
+                is_correct=answer.is_correct,
+                response_time_ms=answer.response_time_ms,
+                difficulty=question.difficulty,
+                answered_at=answer.answered_at,
             )
         )
 

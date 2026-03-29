@@ -75,24 +75,70 @@ class TokenOut(APIModel):
 class QuestionOut(APIModel):
     question_number: int
     question_text: str
+    question_image_url: str | None = None
     choice_a: str
+    choice_a_image_url: str | None = None
     choice_b: str
+    choice_b_image_url: str | None = None
     choice_c: str | None = None
+    choice_c_image_url: str | None = None
     choice_d: str | None = None
+    choice_d_image_url: str | None = None
     choice_e: str | None = None
+    choice_e_image_url: str | None = None
     choice_f: str | None = None
+    choice_f_image_url: str | None = None
+
+
+class AdminQuestionIn(APIModel):
+    question_number: int = Field(ge=1)
+    question_text: str = Field(min_length=1)
+    question_image_url: str | None = None
+    choice_a: str = Field(min_length=1)
+    choice_a_image_url: str | None = None
+    choice_b: str = Field(min_length=1)
+    choice_b_image_url: str | None = None
+    choice_c: str | None = None
+    choice_c_image_url: str | None = None
+    choice_d: str | None = None
+    choice_d_image_url: str | None = None
+    choice_e: str | None = None
+    choice_e_image_url: str | None = None
+    choice_f: str | None = None
+    choice_f_image_url: str | None = None
+    correct_answer: str = Field(min_length=1, max_length=1)
+    difficulty: str | None = None
+
+
+class ModuleOut(APIModel):
+    id: str
+    display_name: str
+    description: str | None = None
+    quiz_count: int = 0
 
 
 class QuizSummaryOut(APIModel):
     id: str
     display_name: str
+    module_id: str | None = None
+    module_display_name: str | None = None
     question_count: int
 
 
 class QuizDetailOut(APIModel):
     id: str
     display_name: str
+    module_id: str | None = None
+    module_display_name: str | None = None
     questions: list[QuestionOut]
+
+
+class AdminQuizDetailOut(APIModel):
+    id: str
+    display_name: str
+    module_id: str | None = None
+    module_display_name: str | None = None
+    questions: list[AdminQuestionIn]
 
 
 class SessionStartOut(APIModel):
@@ -112,7 +158,14 @@ class AnswerOut(APIModel):
 
 class QuestionResultOut(APIModel):
     question_number: int
+    question_text: str
+    question_image_url: str | None = None
     chosen_answer: str
+    correct_answer: str
+    chosen_answer_text: str | None = None
+    chosen_answer_image_url: str | None = None
+    correct_answer_text: str
+    correct_answer_image_url: str | None = None
     is_correct: bool
     response_time_ms: int
     difficulty: str | None = None
@@ -142,6 +195,31 @@ class ImportOut(APIModel):
     quizzes_created: int
     questions_inserted: int
     questions_skipped: int
+
+
+class ModuleCreateIn(APIModel):
+    id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    description: str | None = None
+
+
+class ModuleUpdateIn(APIModel):
+    display_name: str = Field(min_length=1)
+    description: str | None = None
+
+
+class QuizUpsertIn(APIModel):
+    id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    module_id: str | None = None
+    questions: list[AdminQuestionIn] = Field(min_length=1)
+
+
+class ModuleWithQuizzesOut(APIModel):
+    id: str
+    display_name: str
+    description: str | None = None
+    quizzes: list[QuizSummaryOut]
 
 
 class SyntheticStudentOut(APIModel):

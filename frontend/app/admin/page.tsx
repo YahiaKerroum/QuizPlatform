@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function AdminHomePage() {
-  redirect("/admin/import");
+  redirect("/admin/catalog");
 }
-

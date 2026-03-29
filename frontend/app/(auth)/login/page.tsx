@@ -38,14 +38,14 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl items-center px-6 py-12">
       <div className="grid w-full gap-10 md:grid-cols-[1.1fr_0.9fr]">
-        <section className="space-y-6">
+        <section className="motion-rise space-y-6">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Adaptive Quiz Platform</p>
           <h1 className="font-heading text-5xl text-ink md:text-6xl">Collect cleaner question-by-question learning data.</h1>
           <p className="max-w-xl text-lg leading-8 text-ink/75">
             Students answer one prompt at a time, every response is timed, and the dataset stays structured from the first quiz to the final export.
           </p>
         </section>
-        <Card className="space-y-6">
+        <Card className="motion-rise motion-delay-1 space-y-6">
           <div>
             <h2 className="font-heading text-3xl text-ink">Sign in</h2>
             <p className="mt-2 text-sm text-ink/70">Use your student account to continue.</p>
@@ -66,4 +66,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

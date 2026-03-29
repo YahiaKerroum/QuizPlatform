@@ -11,11 +11,34 @@ class Base(DeclarativeBase):
     pass
 
 
+class Module(Base):
+    __tablename__ = "modules"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    quizzes: Mapped[list["Quiz"]] = relationship(
+        back_populates="module",
+        lazy="raise",
+        order_by="Quiz.display_name",
+    )
+
+
 class Quiz(Base):
     __tablename__ = "quizzes"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    module_id: Mapped[str | None] = mapped_column(
+        ForeignKey("modules.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -30,6 +53,10 @@ class Quiz(Base):
     )
     sessions: Mapped[list["Session"]] = relationship(
         back_populates="quiz",
+        lazy="raise",
+    )
+    module: Mapped["Module | None"] = relationship(
+        back_populates="quizzes",
         lazy="raise",
     )
 
@@ -53,12 +80,19 @@ class Question(Base):
     )
     question_number: Mapped[int] = mapped_column(Integer, primary_key=True)
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    question_image_url: Mapped[str | None] = mapped_column(Text)
     choice_a: Mapped[str] = mapped_column(Text, nullable=False)
+    choice_a_image_url: Mapped[str | None] = mapped_column(Text)
     choice_b: Mapped[str] = mapped_column(Text, nullable=False)
+    choice_b_image_url: Mapped[str | None] = mapped_column(Text)
     choice_c: Mapped[str | None] = mapped_column(Text)
+    choice_c_image_url: Mapped[str | None] = mapped_column(Text)
     choice_d: Mapped[str | None] = mapped_column(Text)
+    choice_d_image_url: Mapped[str | None] = mapped_column(Text)
     choice_e: Mapped[str | None] = mapped_column(Text)
+    choice_e_image_url: Mapped[str | None] = mapped_column(Text)
     choice_f: Mapped[str | None] = mapped_column(Text)
+    choice_f_image_url: Mapped[str | None] = mapped_column(Text)
     correct_answer: Mapped[str] = mapped_column(String(1), nullable=False)
     difficulty: Mapped[str | None] = mapped_column(Text)
 

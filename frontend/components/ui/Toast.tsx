@@ -12,6 +12,5 @@ export function Toast({
         ? "border-red-300 bg-red-50 text-red-700"
         : "border-ink/15 bg-white/80 text-ink";
 
-  return <div className={`rounded-3xl border px-4 py-3 text-sm ${classes}`}>{message}</div>;
+  return <div className={`motion-rise rounded-3xl border px-4 py-3 text-sm shadow-[0_16px_30px_rgba(58,43,36,0.08)] ${classes}`}>{message}</div>;
 }
-

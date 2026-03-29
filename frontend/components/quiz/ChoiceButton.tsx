@@ -1,12 +1,16 @@
+import { RichContent } from "@/components/content/RichContent";
+
 export function ChoiceButton({
   letter,
   text,
+  imageUrl,
   selected,
   disabled,
   onSelect,
 }: {
   letter: string;
   text: string;
+  imageUrl: string | null;
   selected: boolean;
   disabled: boolean;
   onSelect: () => void;
@@ -25,8 +29,15 @@ export function ChoiceButton({
       <span className={`mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${selected ? "bg-white/20" : "bg-ink/8"}`}>
         {letter.toUpperCase()}
       </span>
-      <span className="text-base leading-7">{text}</span>
+      <div className="min-w-0 flex-1">
+        <RichContent
+          text={text}
+          imageUrl={imageUrl}
+          imageAlt={`Choice ${letter.toUpperCase()}`}
+          inverted={selected}
+          compact
+        />
+      </div>
     </button>
   );
 }
-

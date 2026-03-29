@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -8,11 +9,23 @@ from fastapi import HTTPException, status
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import Question, Quiz
+from ..models import Module, Question, Quiz
 from ..schemas import ImportOut
 
 VALID_CHOICES = {"a", "b", "c", "d", "e", "f"}
 CHOICE_ORDER = ["choice_a", "choice_b", "choice_c", "choice_d", "choice_e", "choice_f"]
+CHOICE_IMAGE_ORDER = [
+    "choice_a_image_url",
+    "choice_b_image_url",
+    "choice_c_image_url",
+    "choice_d_image_url",
+    "choice_e_image_url",
+    "choice_f_image_url",
+]
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
 
 
 def _pick_value(row: dict[str, Any], *keys: str) -> Any:
@@ -34,6 +47,8 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     question_text = _pick_value(row, "question_text", "question", "text")
     correct_answer = _pick_value(row, "correct_answer", "correct")
     topic = _pick_value(row, "topic", "display_name")
+    module_id = _pick_value(row, "module_id")
+    module_name = _pick_value(row, "module_name", "module_display_name", "module")
 
     if not quiz_id or question_number is None or not question_text or not correct_answer or not topic:
         raise HTTPException(
@@ -45,17 +60,26 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
         "quiz_id": str(quiz_id).strip(),
         "question_number": int(question_number),
         "question_text": str(question_text).strip(),
+        "question_image_url": _pick_value(row, "question_image_url", "question_image", "image_url"),
+        "module_id": _slugify(str(module_id)) if module_id else (_slugify(str(module_name)) if module_name else None),
+        "module_name": str(module_name).strip() if module_name else None,
         "choice_a": str(_pick_value(row, "choice_a") or "").strip(),
+        "choice_a_image_url": _pick_value(row, "choice_a_image_url", "choice_a_image"),
         "choice_b": str(_pick_value(row, "choice_b") or "").strip(),
+        "choice_b_image_url": _pick_value(row, "choice_b_image_url", "choice_b_image"),
         "choice_c": _pick_value(row, "choice_c"),
+        "choice_c_image_url": _pick_value(row, "choice_c_image_url", "choice_c_image"),
         "choice_d": _pick_value(row, "choice_d"),
+        "choice_d_image_url": _pick_value(row, "choice_d_image_url", "choice_d_image"),
         "choice_e": _pick_value(row, "choice_e"),
+        "choice_e_image_url": _pick_value(row, "choice_e_image_url", "choice_e_image"),
         "choice_f": _pick_value(row, "choice_f"),
+        "choice_f_image_url": _pick_value(row, "choice_f_image_url", "choice_f_image"),
         "correct_answer": str(correct_answer).strip().lower(),
         "topic": str(topic).strip(),
     }
 
-    for optional_key in ("choice_c", "choice_d", "choice_e", "choice_f"):
+    for optional_key in ("question_image_url", "module_name", "choice_c", "choice_d", "choice_e", "choice_f", *CHOICE_IMAGE_ORDER):
         value = normalized[optional_key]
         if isinstance(value, str):
             value = value.strip() or None
@@ -122,6 +146,8 @@ def parse_json(content: bytes) -> list[dict[str, Any]]:
         for quiz in data:
             quiz_id = _pick_value(quiz, "quiz_id")
             topic = _pick_value(quiz, "display_name", "topic", "quiz_id")
+            module_id = _pick_value(quiz, "module_id")
+            module_name = _pick_value(quiz, "module_name", "module_display_name", "module")
             questions = quiz.get("questions")
             if not quiz_id or not isinstance(questions, Iterable):
                 raise HTTPException(
@@ -135,6 +161,8 @@ def parse_json(content: bytes) -> list[dict[str, Any]]:
                             **question,
                             "quiz_id": quiz_id,
                             "topic": topic,
+                            "module_id": module_id,
+                            "module_name": module_name,
                         }
                     )
                 )
@@ -156,12 +184,42 @@ async def process_import(db: AsyncSession, rows: list[dict[str, Any]]) -> Import
         )
 
     quizzes_by_id: dict[str, str] = {}
+    quiz_modules_by_id: dict[str, str | None] = {}
+    modules_by_id: dict[str, str | None] = {}
     for row in rows:
         quizzes_by_id.setdefault(row["quiz_id"], row["topic"])
+        quiz_modules_by_id.setdefault(row["quiz_id"], row["module_id"])
+        if row["module_id"]:
+            modules_by_id.setdefault(row["module_id"], row["module_name"] or row["module_id"])
+
+    if modules_by_id:
+        module_stmt = (
+            insert(Module)
+            .values(
+                [
+                    {
+                        "id": module_id,
+                        "display_name": module_name or module_id,
+                    }
+                    for module_id, module_name in modules_by_id.items()
+                ]
+            )
+            .on_conflict_do_nothing(index_elements=[Module.id])
+        )
+        await db.execute(module_stmt)
 
     quiz_stmt = (
         insert(Quiz)
-        .values([{"id": quiz_id, "display_name": topic} for quiz_id, topic in quizzes_by_id.items()])
+        .values(
+            [
+                {
+                    "id": quiz_id,
+                    "display_name": topic,
+                    "module_id": quiz_modules_by_id.get(quiz_id),
+                }
+                for quiz_id, topic in quizzes_by_id.items()
+            ]
+        )
         .on_conflict_do_nothing(index_elements=[Quiz.id])
         .returning(Quiz.id)
     )
@@ -175,12 +233,19 @@ async def process_import(db: AsyncSession, rows: list[dict[str, Any]]) -> Import
                     "quiz_id": row["quiz_id"],
                     "question_number": row["question_number"],
                     "question_text": row["question_text"],
+                    "question_image_url": row["question_image_url"],
                     "choice_a": row["choice_a"],
+                    "choice_a_image_url": row["choice_a_image_url"],
                     "choice_b": row["choice_b"],
+                    "choice_b_image_url": row["choice_b_image_url"],
                     "choice_c": row["choice_c"],
+                    "choice_c_image_url": row["choice_c_image_url"],
                     "choice_d": row["choice_d"],
+                    "choice_d_image_url": row["choice_d_image_url"],
                     "choice_e": row["choice_e"],
+                    "choice_e_image_url": row["choice_e_image_url"],
                     "choice_f": row["choice_f"],
+                    "choice_f_image_url": row["choice_f_image_url"],
                     "correct_answer": row["correct_answer"],
                     "difficulty": None,
                 }

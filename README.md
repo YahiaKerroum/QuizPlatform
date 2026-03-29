@@ -7,6 +7,7 @@ This repo contains a FastAPI backend and a Next.js frontend for an adaptive quiz
 3. Start the FastAPI backend on port `8000`.
 4. Start the Next.js frontend on port `3000`.
 5. Import sample quiz data from the admin page.
+6. Optionally organize quizzes into modules from the admin catalog.
 
 The instructions below follow the setup that was already verified locally.
 
@@ -91,7 +92,7 @@ Copy-Item backend\.env.example backend\.env
 Edit `backend/.env` so it points to your local database. Example:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@127.0.0.1:5432/quiz_platform_local
+DATABASE_URL=postgresql+asyncpg://postgres:123456789@127.0.0.1:5432/quiz_platform_local
 SECRET_KEY=replace-this-with-a-long-random-secret
 ```
 
@@ -146,6 +147,22 @@ Notes about the import:
 
 - Duplicate `(quiz_id, question_number)` rows are skipped automatically.
 - Some questions only have two answer choices. The backend stores missing choices as `NULL`, and the frontend simply does not render them.
+- Image support is URL-based. Supported optional fields are `question_image_url` and `choice_a_image_url` through `choice_f_image_url`.
+- Code-like question text and choice text are rendered in code blocks when the frontend detects code content.
+- Optional module fields are supported during import: `module_id`, `module_name`, `module_display_name`, or `module`.
+
+## 5B. Organize Quizzes Into Modules
+
+Modules are domain-level groupings such as `C Development`, `Machine Learning`, or `Operating Systems`.
+
+Once quizzes are imported, you can:
+
+1. Open `http://127.0.0.1:3000/admin/catalog`
+2. Create a module with an id, display name, and optional description
+3. Create a new quiz or open an existing quiz for editing
+4. Assign each quiz to a module
+
+The student dashboard uses these modules as browsing sections and filter chips, so students can explore the quiz library by domain instead of scanning one flat list.
 
 ## 6. First End-To-End Test
 
@@ -158,9 +175,20 @@ Once the sample import succeeds:
 5. Answer questions and finish the quiz
 6. Open the result page
 
+## Demo Accounts
+
+If you want to log in immediately on a local setup that already has seeded users, these demo accounts are available:
+
+- `demo.student@example.com` / `Password123!`
+- `demo.student2@example.com` / `Password123!`
+- `resultfix.20260329@example.com` / `Password123!`
+
+Synthetic AI accounts may also exist in the database, but they do not have passwords and cannot be used through the normal login form.
+
 Useful pages:
 
 - Student dashboard: `http://127.0.0.1:3000/dashboard`
+- Admin catalog: `http://127.0.0.1:3000/admin/catalog`
 - Admin import: `http://127.0.0.1:3000/admin/import`
 - Admin students: `http://127.0.0.1:3000/admin/students`
 - Admin simulation: `http://127.0.0.1:3000/admin/simulate`
@@ -220,6 +248,16 @@ cd frontend
 npm run dev
 ```
 
+### `next build` runs out of memory on Windows
+
+If Node crashes during `npm run build`, give it a larger heap for that shell:
+
+```powershell
+$env:NODE_OPTIONS="--max-old-space-size=4096"
+cd frontend
+npm run build
+```
+
 ### PowerShell cannot activate the virtual environment
 
 Use:
@@ -233,4 +271,5 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 - Admin routes are currently open for local/demo use.
 - The quickest verified local workflow is PostgreSQL + `backend/schema.sql` + sample CSV import.
+- Modules and quiz assignment are managed from `/admin/catalog`.
 - The project includes the larger `sanfoundry_all_quiz.csv`, but `sanfoundry_sample_10_quizzes.csv` is the recommended first import after cloning.

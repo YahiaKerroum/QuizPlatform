@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 const links = [
+  { href: "/admin/catalog", label: "Catalog" },
   { href: "/admin/import", label: "Import" },
   { href: "/admin/students", label: "Students" },
   { href: "/admin/simulate", label: "Simulate" },
@@ -13,7 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <main className="mx-auto max-w-6xl px-6 py-10">
       <div className="mb-8 space-y-4">
         <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Admin</p>
-        <h1 className="font-heading text-5xl text-ink">Manage imports, synthetic data, difficulty, and exports.</h1>
+        <h1 className="font-heading text-5xl text-ink">Manage modules, quizzes, imports, synthetic data, and exports.</h1>
       </div>
       <nav className="mb-8 flex flex-wrap gap-3">
         {links.map((link) => (
@@ -30,4 +31,3 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </main>
   );
 }
-

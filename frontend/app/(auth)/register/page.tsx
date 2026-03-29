@@ -37,7 +37,7 @@ export default function RegisterPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-12">
-      <Card className="mx-auto w-full max-w-xl space-y-6">
+      <Card className="motion-rise mx-auto w-full max-w-xl space-y-6">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Create account</p>
           <h1 className="mt-3 font-heading text-4xl text-ink">Register as a real student user</h1>

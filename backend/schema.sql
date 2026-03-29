@@ -1,8 +1,16 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE TABLE IF NOT EXISTS modules (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS quizzes (
     id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
+    module_id TEXT REFERENCES modules(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -10,12 +18,19 @@ CREATE TABLE IF NOT EXISTS questions (
     quiz_id TEXT NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     question_number INT NOT NULL,
     question_text TEXT NOT NULL,
+    question_image_url TEXT,
     choice_a TEXT NOT NULL,
+    choice_a_image_url TEXT,
     choice_b TEXT NOT NULL,
+    choice_b_image_url TEXT,
     choice_c TEXT,
+    choice_c_image_url TEXT,
     choice_d TEXT,
+    choice_d_image_url TEXT,
     choice_e TEXT,
+    choice_e_image_url TEXT,
     choice_f TEXT,
+    choice_f_image_url TEXT,
     correct_answer CHAR(1) NOT NULL CHECK (correct_answer IN ('a', 'b', 'c', 'd', 'e', 'f')),
     difficulty TEXT CHECK (difficulty IN ('easy', 'medium', 'hard')),
     PRIMARY KEY (quiz_id, question_number)

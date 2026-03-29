@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { RichContent } from "@/components/content/RichContent";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
@@ -60,7 +61,8 @@ export default function ResultPage() {
             <thead className="text-ink/65">
               <tr>
                 <th className="pb-3">Question</th>
-                <th className="pb-3">Answer</th>
+                <th className="pb-3">Your answer</th>
+                <th className="pb-3">Correct answer</th>
                 <th className="pb-3">Correct</th>
                 <th className="pb-3">Time</th>
                 <th className="pb-3">Difficulty</th>
@@ -69,11 +71,44 @@ export default function ResultPage() {
             <tbody>
               {result.by_question.map((item) => (
                 <tr key={item.question_number} className="border-t border-ink/10">
-                  <td className="py-3">{item.question_number}</td>
-                  <td className="py-3">{item.chosen_answer.toUpperCase()}</td>
-                  <td className="py-3">{item.is_correct ? "Yes" : "No"}</td>
-                  <td className="py-3">{(item.response_time_ms / 1000).toFixed(1)}s</td>
-                  <td className="py-3">{item.difficulty ?? "Unassigned"}</td>
+                  <td className="py-3 align-top">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-ink">Q{item.question_number}</p>
+                      <div className="max-w-md text-ink/70">
+                        <RichContent
+                          text={item.question_text}
+                          imageUrl={item.question_image_url}
+                          imageAlt={`Question ${item.question_number}`}
+                          compact
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 align-top">
+                    <div className="max-w-xs space-y-2">
+                      <p className="font-semibold text-ink">{item.chosen_answer.toUpperCase()}</p>
+                      <RichContent
+                        text={item.chosen_answer_text}
+                        imageUrl={item.chosen_answer_image_url}
+                        imageAlt={`Selected answer for question ${item.question_number}`}
+                        compact
+                      />
+                    </div>
+                  </td>
+                  <td className="py-3 align-top">
+                    <div className="max-w-xs space-y-2">
+                      <p className="font-semibold text-ink">{item.correct_answer.toUpperCase()}</p>
+                      <RichContent
+                        text={item.correct_answer_text}
+                        imageUrl={item.correct_answer_image_url}
+                        imageAlt={`Correct answer for question ${item.question_number}`}
+                        compact
+                      />
+                    </div>
+                  </td>
+                  <td className="py-3 align-top">{item.is_correct ? "Yes" : "No"}</td>
+                  <td className="py-3 align-top">{(item.response_time_ms / 1000).toFixed(1)}s</td>
+                  <td className="py-3 align-top">{item.difficulty ?? "Unassigned"}</td>
                 </tr>
               ))}
             </tbody>

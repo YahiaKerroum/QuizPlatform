@@ -7,18 +7,84 @@ export interface TokenOut {
 export interface QuestionOut {
   question_number: number;
   question_text: string;
+  question_image_url: string | null;
   choice_a: string;
+  choice_a_image_url: string | null;
   choice_b: string;
+  choice_b_image_url: string | null;
   choice_c: string | null;
+  choice_c_image_url: string | null;
   choice_d: string | null;
+  choice_d_image_url: string | null;
   choice_e: string | null;
+  choice_e_image_url: string | null;
   choice_f: string | null;
+  choice_f_image_url: string | null;
+}
+
+export interface AdminQuestionIn {
+  question_number: number;
+  question_text: string;
+  question_image_url: string | null;
+  choice_a: string;
+  choice_a_image_url: string | null;
+  choice_b: string;
+  choice_b_image_url: string | null;
+  choice_c: string | null;
+  choice_c_image_url: string | null;
+  choice_d: string | null;
+  choice_d_image_url: string | null;
+  choice_e: string | null;
+  choice_e_image_url: string | null;
+  choice_f: string | null;
+  choice_f_image_url: string | null;
+  correct_answer: string;
+  difficulty: string | null;
+}
+
+export interface ModuleOut {
+  id: string;
+  display_name: string;
+  description: string | null;
+  quiz_count: number;
 }
 
 export interface QuizSummaryOut {
   id: string;
   display_name: string;
+  module_id: string | null;
+  module_display_name: string | null;
   question_count: number;
+}
+
+export interface ModuleWithQuizzesOut {
+  id: string;
+  display_name: string;
+  description: string | null;
+  quizzes: QuizSummaryOut[];
+}
+
+export interface QuizDetailOut {
+  id: string;
+  display_name: string;
+  module_id: string | null;
+  module_display_name: string | null;
+  questions: QuestionOut[];
+}
+
+export interface QuizUpsertIn {
+  id: string;
+  display_name: string;
+  module_id: string | null;
+  questions: AdminQuestionIn[];
+}
+
+export interface AdminQuizDetailOut {
+  id: string;
+  display_name: string;
+  module_id: string | null;
+  module_display_name: string | null;
+  questions: AdminQuestionIn[];
 }
 
 export interface SessionStartOut {
@@ -38,7 +104,14 @@ export interface AnswerOut {
 
 export interface QuestionResultOut {
   question_number: number;
+  question_text: string;
+  question_image_url: string | null;
   chosen_answer: string;
+  correct_answer: string;
+  chosen_answer_text: string | null;
+  chosen_answer_image_url: string | null;
+  correct_answer_text: string;
+  correct_answer_image_url: string | null;
   is_correct: boolean;
   response_time_ms: number;
   difficulty: string | null;

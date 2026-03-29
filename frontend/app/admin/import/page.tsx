@@ -16,6 +16,16 @@ export default function AdminImportPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  function summarizeError(error: unknown) {
+    if (typeof error === "object" && error && "response" in error) {
+      const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      if (typeof detail === "string") {
+        return detail;
+      }
+    }
+    return "Import failed.";
+  }
+
   async function uploadForm(form: FormData) {
     setLoading(true);
     setMessage(null);
@@ -24,9 +34,13 @@ export default function AdminImportPage() {
       const { data } = await api.post<ImportOut>("/admin/import", form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setMessage(`Inserted ${data.questions_inserted} questions. Skipped ${data.questions_skipped} duplicates.`);
-    } catch {
-      setMessage("Import failed.");
+      setMessage(
+        `Created ${data.quizzes_created} quizzes. Inserted ${data.questions_inserted} questions. Skipped ${data.questions_skipped} duplicates.`,
+      );
+      setFile(null);
+      setJsonText("");
+    } catch (error) {
+      setMessage(summarizeError(error));
     } finally {
       setLoading(false);
     }
@@ -36,7 +50,7 @@ export default function AdminImportPage() {
     <section className="grid gap-6">
       <Card className="space-y-5">
         <h2 className="font-heading text-3xl text-ink">Import file</h2>
-        <FileUpload onChange={setFile} />
+        <FileUpload file={file} onChange={setFile} />
         <Button
           variant="secondary"
           disabled={!file || loading}
@@ -66,8 +80,7 @@ export default function AdminImportPage() {
           {loading ? "Uploading..." : "Submit JSON"}
         </Button>
       </Card>
-      {message ? <Toast message={message} tone={message.includes("failed") ? "error" : "success"} /> : null}
+      {message ? <Toast message={message} tone={message.toLowerCase().includes("failed") ? "error" : "success"} /> : null}
     </section>
   );
 }
-

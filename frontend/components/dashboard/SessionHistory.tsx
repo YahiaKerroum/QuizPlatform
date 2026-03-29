@@ -22,7 +22,7 @@ export function SessionHistory({ sessions }: { sessions: SessionHistoryOut[] }) 
             </thead>
             <tbody>
               {sessions.map((session) => (
-                <tr key={session.session_id} className="border-t border-ink/10">
+                <tr key={session.session_id} className="border-t border-ink/10 transition duration-300 hover:bg-white/55">
                   <td className="px-6 py-4">{session.display_name}</td>
                   <td className="px-6 py-4">{session.correct} / {session.total}</td>
                   <td className="px-6 py-4">{Math.round(session.accuracy * 100)}%</td>
@@ -36,4 +36,3 @@ export function SessionHistory({ sessions }: { sessions: SessionHistoryOut[] }) 
     </Card>
   );
 }
-
