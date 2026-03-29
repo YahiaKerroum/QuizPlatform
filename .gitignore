@@ -1,0 +1,23 @@
+# Environment files
+backend/.env
+frontend/.env.local
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+
+# Local runtime artifacts
+backend/*.log
+frontend/*.log
+.local_pg/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
