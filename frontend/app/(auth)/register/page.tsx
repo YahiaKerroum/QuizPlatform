@@ -19,6 +19,16 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  function summarizeError(err: unknown) {
+    if (typeof err === "object" && err && "response" in err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      if (typeof detail === "string") {
+        return detail;
+      }
+    }
+    return "Registration failed. Make sure the email is unique and the password is at least 8 characters.";
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -28,8 +38,8 @@ export default function RegisterPage() {
       const { data } = await api.post<TokenOut>("/auth/register", { email, password });
       setToken(data.access_token);
       router.push("/dashboard");
-    } catch {
-      setError("Registration failed. Make sure the email is unique and the password is at least 8 characters.");
+    } catch (err) {
+      setError(summarizeError(err));
     } finally {
       setLoading(false);
     }

@@ -20,6 +20,12 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY is not set.")
 
+ADMIN_ALLOWED_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("ADMIN_ALLOWED_EMAILS", "").split(",")
+    if email.strip()
+}
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -41,14 +47,24 @@ def create_access_token(student_id: UUID) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     payload = {
         "sub": str(student_id),
+        "role": "student",
         "exp": expires_at,
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def is_admin_email(email: str) -> bool:
+    return email.strip().lower() in ADMIN_ALLOWED_EMAILS
+
+
 def verify_token(token: str) -> UUID:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("role") != "student":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token.",
+            )
         subject = payload.get("sub")
         if not subject:
             raise HTTPException(
@@ -81,4 +97,22 @@ async def get_current_student(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Student not found.",
         )
+    return student
+
+
+def require_admin(
+    student: Student = Depends(get_current_student),
+) -> Student:
+    if not ADMIN_ALLOWED_EMAILS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access is not configured.",
+        )
+
+    if not is_admin_email(student.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is not allowed to access the admin portal.",
+        )
+
     return student

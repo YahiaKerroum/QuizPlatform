@@ -19,6 +19,16 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  function summarizeError(err: unknown) {
+    if (typeof err === "object" && err && "response" in err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      if (typeof detail === "string") {
+        return detail;
+      }
+    }
+    return "Login failed. Check your email and password.";
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -28,8 +38,8 @@ export default function LoginPage() {
       const { data } = await api.post<TokenOut>("/auth/login", { email, password });
       setToken(data.access_token);
       router.push("/dashboard");
-    } catch {
-      setError("Login failed. Check your email and password.");
+    } catch (err) {
+      setError(summarizeError(err));
     } finally {
       setLoading(false);
     }

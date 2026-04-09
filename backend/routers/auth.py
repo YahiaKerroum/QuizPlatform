@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import create_access_token, hash_password, verify_password
+from ..auth import create_access_token, get_current_student, hash_password, require_admin, verify_password
 from ..database import get_db
 from ..models import Student
-from ..schemas import LoginIn, RegisterIn, TokenOut
+from ..schemas import AdminAccessOut, LoginIn, RegisterIn, TokenOut
 
 router = APIRouter()
 
@@ -56,3 +56,7 @@ async def login_student(payload: LoginIn, db: AsyncSession = Depends(get_db)) ->
         student_id=student.id,
     )
 
+
+@router.get("/admin/status", response_model=AdminAccessOut)
+async def admin_status(student: Student = Depends(require_admin)) -> AdminAccessOut:
+    return AdminAccessOut(allowed=True, email=student.email)

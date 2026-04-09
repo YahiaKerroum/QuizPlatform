@@ -235,3 +235,8 @@ class SimBatchOut(APIModel):
 
 class DifficultyOut(APIModel):
     updated: int
+
+
+class AdminAccessOut(APIModel):
+    allowed: bool
+    email: EmailStr

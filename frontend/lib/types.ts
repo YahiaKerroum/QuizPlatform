@@ -4,6 +4,11 @@ export interface TokenOut {
   student_id: string;
 }
 
+export interface AdminAccessOut {
+  allowed: boolean;
+  email: string;
+}
+
 export interface QuestionOut {
   question_number: number;
   question_text: string;

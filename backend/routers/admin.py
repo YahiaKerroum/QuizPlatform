@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import require_admin
 from ..database import get_db
 from ..schemas import (
     AdminQuizDetailOut,
@@ -12,7 +13,6 @@ from ..schemas import (
     ModuleCreateIn,
     ModuleOut,
     ModuleUpdateIn,
-    QuizDetailOut,
     QuizSummaryOut,
     QuizUpsertIn,
     SimBatchIn,
@@ -32,7 +32,7 @@ from ..services.catalog_service import (
 from ..services.export_service import stream_answers_csv
 from ..services.import_service import parse_csv, parse_json, process_import
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.post("/import", response_model=ImportOut)
