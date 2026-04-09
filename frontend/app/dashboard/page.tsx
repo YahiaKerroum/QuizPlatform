@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { StudentLogoutButton } from "@/components/auth/StudentLogoutButton";
 import { QuizCard } from "@/components/dashboard/QuizCard";
 import { SessionHistory } from "@/components/dashboard/SessionHistory";
 import { Button } from "@/components/ui/Button";
@@ -68,11 +69,14 @@ export default function DashboardPage() {
             Browse by module, then drop into the exact quiz you want without losing momentum.
           </p>
         </div>
-        <Card className="min-w-[15rem] space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-clay">Library snapshot</p>
-          <p className="font-heading text-4xl text-ink">{totalQuizCount}</p>
-          <p className="text-sm text-ink/68">quizzes across {modules.length} module groups</p>
-        </Card>
+        <div className="flex flex-col items-start gap-4 md:items-end">
+          <StudentLogoutButton />
+          <Card className="min-w-[15rem] space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-clay">Library snapshot</p>
+            <p className="font-heading text-4xl text-ink">{totalQuizCount}</p>
+            <p className="text-sm text-ink/68">quizzes across {modules.length} module groups</p>
+          </Card>
+        </div>
       </section>
       {error ? <Toast message={error} tone="error" /> : null}
       {modules.length > 0 ? (

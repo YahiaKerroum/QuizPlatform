@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { StudentLogoutButton } from "@/components/auth/StudentLogoutButton";
 import { QuestionCard } from "@/components/quiz/QuestionCard";
 import { QuizProgress } from "@/components/quiz/QuizProgress";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
@@ -63,7 +64,10 @@ function QuizSessionView({
         <div className="flex-1">
           <QuizProgress value={quiz.state.questionNumber} total={quiz.state.total} />
         </div>
-        <QuizTimer elapsed={elapsed} />
+        <div className="flex items-center gap-3 self-end md:self-auto">
+          <QuizTimer elapsed={elapsed} />
+          <StudentLogoutButton />
+        </div>
       </div>
       {quiz.state.error ? <div className="mb-4"><Toast message={quiz.state.error} tone="error" /></div> : null}
       <QuestionCard
