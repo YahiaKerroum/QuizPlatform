@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { Textarea } from "@/components/ui/Input";
+import { summarizeFormError } from "@/lib/form";
 
 export function JsonTextarea({
   value,
@@ -19,7 +20,7 @@ export function JsonTextarea({
       JSON.parse(value);
       return "Valid JSON.";
     } catch (error) {
-      return error instanceof Error ? error.message : "Invalid JSON.";
+      return summarizeFormError(error, "Invalid JSON.");
     }
   }, [value]);
 
@@ -30,4 +31,3 @@ export function JsonTextarea({
     </div>
   );
 }
-

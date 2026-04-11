@@ -7,6 +7,8 @@ import { SimulationForm } from "@/components/admin/SimulationForm";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
 import api from "@/lib/api";
+import { summarizeFormError } from "@/lib/form";
+import { simulationSchema } from "@/lib/validation";
 import type { SimBatchOut } from "@/lib/types";
 
 export default function AdminSimulatePage() {
@@ -20,12 +22,16 @@ export default function AdminSimulatePage() {
     setMessage(null);
 
     try {
-      const parsed = JSON.parse(value);
-      const { data } = await api.post<SimBatchOut>("/admin/simulate/batch", parsed);
+      const parsed = simulationSchema.safeParse(JSON.parse(value));
+      if (!parsed.success) {
+        throw parsed.error;
+      }
+
+      const { data } = await api.post<SimBatchOut>("/admin/simulate/batch", parsed.data);
       setResult(data);
       setMessage("Simulation completed.");
-    } catch {
-      setMessage("Simulation failed.");
+    } catch (error) {
+      setMessage(`Simulation failed. ${summarizeFormError(error, "Check the JSON and try again.")}`);
     } finally {
       setLoading(false);
     }
@@ -49,4 +55,3 @@ export default function AdminSimulatePage() {
     </section>
   );
 }
-

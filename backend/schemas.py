@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -24,7 +25,7 @@ class SessionStartIn(APIModel):
 
 class AnswerIn(APIModel):
     question_number: int = Field(ge=1)
-    chosen_answer: str = Field(min_length=1, max_length=1)
+    chosen_answer: Literal["a", "b", "c", "d", "e", "f"]
     response_time_ms: int = Field(gt=0, lt=600000)
 
 
@@ -59,7 +60,7 @@ class SimBatchIn(APIModel):
 class DifficultyUpdateItem(APIModel):
     quiz_id: str = Field(min_length=1)
     question_number: int = Field(ge=1)
-    difficulty: str
+    difficulty: Literal["easy", "medium", "hard"]
 
 
 class DifficultyIn(APIModel):
@@ -68,8 +69,13 @@ class DifficultyIn(APIModel):
 
 class TokenOut(APIModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: Literal["bearer"] = "bearer"
     student_id: UUID
+
+
+class AuthMeOut(APIModel):
+    email: EmailStr
+    is_admin: bool
 
 
 class QuestionOut(APIModel):
@@ -106,8 +112,8 @@ class AdminQuestionIn(APIModel):
     choice_e_image_url: str | None = None
     choice_f: str | None = None
     choice_f_image_url: str | None = None
-    correct_answer: str = Field(min_length=1, max_length=1)
-    difficulty: str | None = None
+    correct_answer: Literal["a", "b", "c", "d", "e", "f"]
+    difficulty: Literal["easy", "medium", "hard"] | None = None
 
 
 class ModuleOut(APIModel):
@@ -225,6 +231,16 @@ class ModuleWithQuizzesOut(APIModel):
 class SyntheticStudentOut(APIModel):
     email: EmailStr
     id: UUID
+
+
+class ProfileRoleSetIn(APIModel):
+    email: EmailStr
+    role: Literal["student", "admin"]
+
+
+class ProfileRoleOut(APIModel):
+    email: EmailStr
+    role: Literal["student", "admin"]
 
 
 class SimBatchOut(APIModel):

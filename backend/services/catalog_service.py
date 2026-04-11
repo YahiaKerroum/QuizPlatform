@@ -1,11 +1,8 @@
 import re
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from postgrest import AsyncPostgrestClient
 
-from ..models import Answer, Module, Question, Quiz
 from ..schemas import (
     AdminQuizDetailOut,
     AdminQuestionIn,
@@ -59,45 +56,43 @@ def _serialize_quiz_summary(
     )
 
 
-def _serialize_quiz_detail(quiz: Quiz) -> QuizDetailOut:
-    module = quiz.module
+def _serialize_quiz_detail(quiz: dict, module: dict | None, questions: list[dict]) -> QuizDetailOut:
     return QuizDetailOut(
-        id=quiz.id,
-        display_name=quiz.display_name,
-        module_id=module.id if module else None,
-        module_display_name=module.display_name if module else None,
-        questions=[QuestionOut.model_validate(question) for question in quiz.questions],
+        id=quiz["id"],
+        display_name=quiz["display_name"],
+        module_id=module["id"] if module else None,
+        module_display_name=module["display_name"] if module else None,
+        questions=[QuestionOut.model_validate(question) for question in questions],
     )
 
 
-def _serialize_admin_quiz_detail(quiz: Quiz) -> AdminQuizDetailOut:
-    module = quiz.module
+def _serialize_admin_quiz_detail(quiz: dict, module: dict | None, questions: list[dict]) -> AdminQuizDetailOut:
     return AdminQuizDetailOut(
-        id=quiz.id,
-        display_name=quiz.display_name,
-        module_id=module.id if module else None,
-        module_display_name=module.display_name if module else None,
+        id=quiz["id"],
+        display_name=quiz["display_name"],
+        module_id=module["id"] if module else None,
+        module_display_name=module["display_name"] if module else None,
         questions=[
             AdminQuestionIn(
-                question_number=question.question_number,
-                question_text=question.question_text,
-                question_image_url=question.question_image_url,
-                choice_a=question.choice_a,
-                choice_a_image_url=question.choice_a_image_url,
-                choice_b=question.choice_b,
-                choice_b_image_url=question.choice_b_image_url,
-                choice_c=question.choice_c,
-                choice_c_image_url=question.choice_c_image_url,
-                choice_d=question.choice_d,
-                choice_d_image_url=question.choice_d_image_url,
-                choice_e=question.choice_e,
-                choice_e_image_url=question.choice_e_image_url,
-                choice_f=question.choice_f,
-                choice_f_image_url=question.choice_f_image_url,
-                correct_answer=question.correct_answer,
-                difficulty=question.difficulty,
+                question_number=question["question_number"],
+                question_text=question["question_text"],
+                question_image_url=question.get("question_image_url"),
+                choice_a=question["choice_a"],
+                choice_a_image_url=question.get("choice_a_image_url"),
+                choice_b=question["choice_b"],
+                choice_b_image_url=question.get("choice_b_image_url"),
+                choice_c=question.get("choice_c"),
+                choice_c_image_url=question.get("choice_c_image_url"),
+                choice_d=question.get("choice_d"),
+                choice_d_image_url=question.get("choice_d_image_url"),
+                choice_e=question.get("choice_e"),
+                choice_e_image_url=question.get("choice_e_image_url"),
+                choice_f=question.get("choice_f"),
+                choice_f_image_url=question.get("choice_f_image_url"),
+                correct_answer=question["correct_answer"],
+                difficulty=question.get("difficulty"),
             )
-            for question in quiz.questions
+            for question in questions
         ],
     )
 
@@ -183,100 +178,113 @@ def _normalize_quiz_payload(payload: QuizUpsertIn) -> tuple[str, str, str | None
     return quiz_id, display_name, module_id, questions
 
 
-async def _require_module(db: AsyncSession, module_id: str) -> Module:
-    module = await db.get(Module, module_id)
+async def _require_module(db: AsyncPostgrestClient, module_id: str) -> dict:
+    response = await db.table("modules").select("*").eq("id", module_id).maybe_single().execute()
+    module = response.data
     if module is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found.")
     return module
 
 
-async def list_modules(db: AsyncSession) -> list[ModuleOut]:
-    result = await db.execute(
-        select(
-            Module.id,
-            Module.display_name,
-            Module.description,
-            func.count(Quiz.id).label("quiz_count"),
-        )
-        .outerjoin(Quiz, Quiz.module_id == Module.id)
-        .group_by(Module.id, Module.display_name, Module.description)
-        .order_by(Module.display_name.asc())
-    )
+async def list_modules(db: AsyncPostgrestClient) -> list[ModuleOut]:
+    modules_resp = await db.table("modules").select("*").order("display_name").execute()
+    modules = modules_resp.data
+
+    quizzes_resp = await db.table("quizzes").select("id, module_id").execute()
+    quizzes = quizzes_resp.data
+
+    counts = {}
+    for q in quizzes:
+        m_id = q.get("module_id")
+        if m_id:
+            counts[m_id] = counts.get(m_id, 0) + 1
+
     return [
         ModuleOut(
-            id=row.id,
-            display_name=row.display_name,
-            description=row.description,
-            quiz_count=int(row.quiz_count or 0),
+            id=m["id"],
+            display_name=m["display_name"],
+            description=m.get("description"),
+            quiz_count=counts.get(m["id"], 0),
         )
-        for row in result.all()
+        for m in modules
     ]
 
 
-async def create_module(db: AsyncSession, payload: ModuleCreateIn) -> ModuleOut:
+async def create_module(db: AsyncPostgrestClient, payload: ModuleCreateIn) -> ModuleOut:
     module_id = _normalize_module_id(payload.id)
     if not module_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Module id is invalid.")
 
-    existing = await db.get(Module, module_id)
-    if existing is not None:
+    existing_resp = await db.table("modules").select("id").eq("id", module_id).maybe_single().execute()
+    if existing_resp is not None and existing_resp.data is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Module id already exists.")
 
-    module = Module(
-        id=module_id,
-        display_name=payload.display_name.strip(),
-        description=_clean_optional(payload.description),
-    )
-    db.add(module)
-    await db.flush()
-    return ModuleOut(id=module.id, display_name=module.display_name, description=module.description, quiz_count=0)
+    data = {
+        "id": module_id,
+        "display_name": payload.display_name.strip(),
+        "description": _clean_optional(payload.description),
+    }
+    await db.table("modules").insert(data).execute()
+    return ModuleOut(id=data["id"], display_name=data["display_name"], description=data["description"], quiz_count=0)
 
 
-async def update_module(db: AsyncSession, module_id: str, payload: ModuleUpdateIn) -> ModuleOut:
-    module = await db.get(Module, module_id)
-    if module is None:
+async def update_module(db: AsyncPostgrestClient, module_id: str, payload: ModuleUpdateIn) -> ModuleOut:
+    module_resp = await db.table("modules").select("*").eq("id", module_id).maybe_single().execute()
+    if module_resp.data is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found.")
 
-    module.display_name = payload.display_name.strip()
-    module.description = _clean_optional(payload.description)
-    await db.flush()
-
-    quiz_count = await db.scalar(select(func.count()).select_from(Quiz).where(Quiz.module_id == module.id))
+    data = {
+        "display_name": payload.display_name.strip(),
+        "description": _clean_optional(payload.description),
+    }
+    await db.table("modules").update(data).eq("id", module_id).execute()
+    
+    quizzes_resp = await db.table("quizzes").select("id", count="exact").eq("module_id", module_id).execute()
+    quiz_count = quizzes_resp.count if quizzes_resp.count else 0
+    
     return ModuleOut(
-        id=module.id,
-        display_name=module.display_name,
-        description=module.description,
-        quiz_count=int(quiz_count or 0),
+        id=module_id,
+        display_name=data["display_name"],
+        description=data["description"],
+        quiz_count=quiz_count,
     )
 
 
-async def list_quizzes(db: AsyncSession) -> list[QuizSummaryOut]:
-    result = await db.execute(
-        select(
-            Quiz.id,
-            Quiz.display_name,
-            Quiz.module_id,
-            Module.display_name.label("module_display_name"),
-            func.count(Question.question_number).label("question_count"),
-        )
-        .outerjoin(Question, Question.quiz_id == Quiz.id)
-        .outerjoin(Module, Module.id == Quiz.module_id)
-        .group_by(Quiz.id, Quiz.display_name, Quiz.module_id, Module.display_name)
-        .order_by(Module.display_name.asc().nullslast(), Quiz.display_name.asc())
-    )
+async def list_quizzes(db: AsyncPostgrestClient) -> list[QuizSummaryOut]:
+    quizzes_resp = await db.table("quizzes").select("*, modules(*)").execute()
+    quizzes = quizzes_resp.data
+
+    questions_resp = await db.table("questions").select("quiz_id", count="exact").execute()
+    
+    # We need a group by to get counts per quiz, but postgrest python doesn't support complex group by easily
+    # So fetch all questions quiz_id and count
+    all_questions_resp = await db.table("questions").select("quiz_id").execute()
+    
+    counts = {}
+    for q in all_questions_resp.data:
+        q_id = q["quiz_id"]
+        counts[q_id] = counts.get(q_id, 0) + 1
+        
+    def _sort_key(quiz):
+        module = quiz.get("modules")
+        mod_name = module.get("display_name", "") if module else "zzz" # Nulls last
+        return (mod_name, quiz["display_name"])
+
+    quizzes.sort(key=_sort_key)
+
     return [
         _serialize_quiz_summary(
-            row.id,
-            row.display_name,
-            row.question_count,
-            row.module_id,
-            row.module_display_name,
+            quiz["id"],
+            quiz["display_name"],
+            counts.get(quiz["id"], 0),
+            quiz.get("module_id"),
+            quiz.get("modules", {}).get("display_name") if quiz.get("modules") else None,
         )
-        for row in result.all()
+        for quiz in quizzes
     ]
 
 
-async def list_modules_with_quizzes(db: AsyncSession) -> list[ModuleWithQuizzesOut]:
+async def list_modules_with_quizzes(db: AsyncPostgrestClient) -> list[ModuleWithQuizzesOut]:
     modules = await list_modules(db)
     quizzes = await list_quizzes(db)
 
@@ -312,52 +320,49 @@ async def list_modules_with_quizzes(db: AsyncSession) -> list[ModuleWithQuizzesO
     return payload
 
 
-async def get_quiz_detail(db: AsyncSession, quiz_id: str) -> QuizDetailOut:
-    result = await db.execute(
-        select(Quiz)
-        .options(selectinload(Quiz.questions), selectinload(Quiz.module))
-        .where(Quiz.id == quiz_id)
-    )
-    quiz = result.scalar_one_or_none()
+async def get_quiz_detail(db: AsyncPostgrestClient, quiz_id: str) -> QuizDetailOut:
+    quiz_resp = await db.table("quizzes").select("*, modules(*), questions(*)").eq("id", quiz_id).maybe_single().execute()
+    quiz = quiz_resp.data
     if quiz is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
-    return _serialize_quiz_detail(quiz)
+    
+    questions = sorted(quiz.get("questions", []), key=lambda q: q["question_number"])
+    return _serialize_quiz_detail(quiz, quiz.get("modules"), questions)
 
 
-async def get_admin_quiz_detail(db: AsyncSession, quiz_id: str) -> AdminQuizDetailOut:
-    result = await db.execute(
-        select(Quiz)
-        .options(selectinload(Quiz.questions), selectinload(Quiz.module))
-        .where(Quiz.id == quiz_id)
-    )
-    quiz = result.scalar_one_or_none()
+async def get_admin_quiz_detail(db: AsyncPostgrestClient, quiz_id: str) -> AdminQuizDetailOut:
+    quiz_resp = await db.table("quizzes").select("*, modules(*), questions(*)").eq("id", quiz_id).maybe_single().execute()
+    quiz = quiz_resp.data
     if quiz is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
-    return _serialize_admin_quiz_detail(quiz)
+    
+    questions = sorted(quiz.get("questions", []), key=lambda q: q["question_number"])
+    return _serialize_admin_quiz_detail(quiz, quiz.get("modules"), questions)
 
 
-async def create_quiz(db: AsyncSession, payload: QuizUpsertIn) -> AdminQuizDetailOut:
+async def create_quiz(db: AsyncPostgrestClient, payload: QuizUpsertIn) -> AdminQuizDetailOut:
     quiz_id, display_name, module_id, questions = _normalize_quiz_payload(payload)
 
-    existing = await db.get(Quiz, quiz_id)
-    if existing is not None:
+    existing_resp = await db.table("quizzes").select("id").eq("id", quiz_id).maybe_single().execute()
+    if existing_resp is not None and existing_resp.data is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quiz id already exists.")
 
     if module_id:
         await _require_module(db, module_id)
 
-    quiz = Quiz(id=quiz_id, display_name=display_name, module_id=module_id)
-    db.add(quiz)
-    await db.flush()
+    quiz_data = {"id": quiz_id, "display_name": display_name, "module_id": module_id}
+    await db.table("quizzes").insert(quiz_data).execute()
 
-    for question in questions:
-        db.add(Question(quiz_id=quiz.id, **question))
+    for q in questions:
+        q["quiz_id"] = quiz_id
+    
+    if questions:
+        await db.table("questions").insert(questions).execute()
 
-    await db.flush()
-    return await get_admin_quiz_detail(db, quiz.id)
+    return await get_admin_quiz_detail(db, quiz_id)
 
 
-async def update_quiz(db: AsyncSession, quiz_id: str, payload: QuizUpsertIn) -> AdminQuizDetailOut:
+async def update_quiz(db: AsyncPostgrestClient, quiz_id: str, payload: QuizUpsertIn) -> AdminQuizDetailOut:
     normalized_id, display_name, module_id, questions = _normalize_quiz_payload(payload)
     if normalized_id != quiz_id:
         raise HTTPException(
@@ -365,22 +370,21 @@ async def update_quiz(db: AsyncSession, quiz_id: str, payload: QuizUpsertIn) -> 
             detail="Quiz id in the body must match the URL.",
         )
 
-    result = await db.execute(
-        select(Quiz)
-        .options(selectinload(Quiz.questions), selectinload(Quiz.module))
-        .where(Quiz.id == quiz_id)
-    )
-    quiz = result.scalar_one_or_none()
+    quiz_resp = await db.table("quizzes").select("*, questions(*)").eq("id", quiz_id).maybe_single().execute()
+    quiz = quiz_resp.data
     if quiz is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
 
     if module_id:
         await _require_module(db, module_id)
 
-    answers_count = await db.scalar(select(func.count()).select_from(Answer).where(Answer.quiz_id == quiz_id))
-    existing_by_number = {question.question_number: question for question in quiz.questions}
-    incoming_numbers = {int(question["question_number"]) for question in questions}
-    existing_numbers = set(existing_by_number)
+    answers_resp = await db.table("answers").select("id", count="exact").eq("quiz_id", quiz_id).limit(1).execute()
+    answers_count = answers_resp.count if answers_resp.count else 0
+    
+    existing_questions = quiz.get("questions", [])
+    existing_by_number = {q["question_number"]: q for q in existing_questions}
+    incoming_numbers = {int(q["question_number"]) for q in questions}
+    existing_numbers = set(existing_by_number.keys())
 
     if answers_count and incoming_numbers != existing_numbers:
         raise HTTPException(
@@ -388,28 +392,20 @@ async def update_quiz(db: AsyncSession, quiz_id: str, payload: QuizUpsertIn) -> 
             detail="This quiz already has answer history, so you can only edit existing question content, not add or remove question numbers.",
         )
 
-    quiz.display_name = display_name
-    quiz.module_id = module_id
+    await db.table("quizzes").update({"display_name": display_name, "module_id": module_id}).eq("id", quiz_id).execute()
 
-    for question_payload in questions:
-        question_number = int(question_payload["question_number"])
-        question = existing_by_number.get(question_number)
-        if question is None:
-            db.add(Question(quiz_id=quiz.id, **question_payload))
-            continue
-
-        for key, value in question_payload.items():
-            setattr(question, key, value)
+    # Update questions
+    for q_payload in questions:
+        q_num = int(q_payload["question_number"])
+        q_payload["quiz_id"] = quiz_id
+        if q_num not in existing_by_number:
+            await db.table("questions").insert(q_payload).execute()
+        else:
+            await db.table("questions").update(q_payload).eq("quiz_id", quiz_id).eq("question_number", q_num).execute()
 
     if not answers_count:
         removable_numbers = existing_numbers - incoming_numbers
         if removable_numbers:
-            await db.execute(
-                delete(Question).where(
-                    Question.quiz_id == quiz_id,
-                    Question.question_number.in_(removable_numbers),
-                )
-            )
+            await db.table("questions").delete().eq("quiz_id", quiz_id).in_("question_number", list(removable_numbers)).execute()
 
-    await db.flush()
-    return await get_admin_quiz_detail(db, quiz.id)
+    return await get_admin_quiz_detail(db, quiz_id)

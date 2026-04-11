@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
 import api from "@/lib/api";
+import { summarizeFormError } from "@/lib/form";
+import { difficultyUpdatesSchema } from "@/lib/validation";
 import type { DifficultyOut } from "@/lib/types";
 
 export default function AdminDifficultyPage() {
@@ -19,11 +21,15 @@ export default function AdminDifficultyPage() {
     setMessage(null);
 
     try {
-      const parsed = JSON.parse(value);
-      const { data } = await api.post<DifficultyOut>("/admin/questions/difficulty", parsed);
+      const parsed = difficultyUpdatesSchema.safeParse(JSON.parse(value));
+      if (!parsed.success) {
+        throw parsed.error;
+      }
+
+      const { data } = await api.post<DifficultyOut>("/admin/questions/difficulty", parsed.data);
       setMessage(`Updated ${data.updated} questions.`);
-    } catch {
-      setMessage("Difficulty update failed.");
+    } catch (error) {
+      setMessage(`Difficulty update failed. ${summarizeFormError(error, "Check the JSON and try again.")}`);
     } finally {
       setLoading(false);
     }
@@ -42,4 +48,3 @@ export default function AdminDifficultyPage() {
     </section>
   );
 }
-

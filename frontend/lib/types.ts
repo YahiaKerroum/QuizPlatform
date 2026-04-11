@@ -1,9 +1,3 @@
-export interface TokenOut {
-  access_token: string;
-  token_type: string;
-  student_id: string;
-}
-
 export interface QuestionOut {
   question_number: number;
   question_text: string;
@@ -38,8 +32,8 @@ export interface AdminQuestionIn {
   choice_e_image_url: string | null;
   choice_f: string | null;
   choice_f_image_url: string | null;
-  correct_answer: string;
-  difficulty: string | null;
+  correct_answer: "a" | "b" | "c" | "d" | "e" | "f";
+  difficulty: "easy" | "medium" | "hard" | null;
 }
 
 export interface ModuleOut {
@@ -106,15 +100,15 @@ export interface QuestionResultOut {
   question_number: number;
   question_text: string;
   question_image_url: string | null;
-  chosen_answer: string;
-  correct_answer: string;
+  chosen_answer: "a" | "b" | "c" | "d" | "e" | "f";
+  correct_answer: "a" | "b" | "c" | "d" | "e" | "f";
   chosen_answer_text: string | null;
   chosen_answer_image_url: string | null;
   correct_answer_text: string;
   correct_answer_image_url: string | null;
   is_correct: boolean;
   response_time_ms: number;
-  difficulty: string | null;
+  difficulty: "easy" | "medium" | "hard" | null;
   answered_at: string;
 }
 
@@ -156,4 +150,19 @@ export interface SimBatchOut {
 
 export interface DifficultyOut {
   updated: number;
+}
+
+export interface AuthMeOut {
+  email: string;
+  is_admin: boolean;
+}
+
+export interface ProfileRoleOut {
+  email: string;
+  role: "student" | "admin";
+}
+
+export interface ProfileRoleSetIn {
+  email: string;
+  role: "student" | "admin";
 }
