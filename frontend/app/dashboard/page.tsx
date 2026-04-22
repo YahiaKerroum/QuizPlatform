@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 
 import { QuizCard } from "@/components/dashboard/QuizCard";
 import { SessionHistory } from "@/components/dashboard/SessionHistory";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
-import api from "@/lib/api";
+import api, { summarizeApiError } from "@/lib/api";
 import type { ModuleWithQuizzesOut, SessionHistoryOut, SessionStartOut } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -28,8 +29,8 @@ export default function DashboardPage() {
         ]);
         setModules(modulesResponse.data);
         setHistory(historyResponse.data);
-      } catch {
-        setError("Could not load the dashboard.");
+      } catch (error) {
+        setError(summarizeApiError(error, "Could not load the dashboard."));
       }
     }
 
@@ -44,8 +45,8 @@ export default function DashboardPage() {
       const { data } = await api.post<SessionStartOut>("/sessions", { quiz_id: quizId });
       sessionStorage.setItem("session_start", JSON.stringify(data));
       router.push(`/quiz/${data.session_id}`);
-    } catch {
-      setError("Could not start the quiz session.");
+    } catch (error) {
+      setError(summarizeApiError(error, "Could not start the quiz session."));
     } finally {
       setLoadingQuizId(null);
     }
@@ -68,10 +69,13 @@ export default function DashboardPage() {
             Browse by module, then drop into the exact quiz you want without losing momentum.
           </p>
         </div>
-        <Card className="min-w-[15rem] space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-clay">Library snapshot</p>
-          <p className="font-heading text-4xl text-ink">{totalQuizCount}</p>
-          <p className="text-sm text-ink/68">quizzes across {modules.length} module groups</p>
+        <Card className="min-w-[15rem] space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-clay">Library snapshot</p>
+            <p className="font-heading text-4xl text-ink">{totalQuizCount}</p>
+            <p className="text-sm text-ink/68">quizzes across {modules.length} module groups</p>
+          </div>
+          <LogoutButton className="w-full" />
         </Card>
       </section>
       {error ? <Toast message={error} tone="error" /> : null}

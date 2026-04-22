@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/Card";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Toast } from "@/components/ui/Toast";
 import api from "@/lib/api";
+import { summarizeFormError } from "@/lib/form";
+import { moduleSchema, quizSchema } from "@/lib/validation";
 import type { AdminQuizDetailOut, ModuleOut, QuizSummaryOut, QuizUpsertIn } from "@/lib/types";
 
 const defaultQuestions = JSON.stringify(
@@ -36,11 +38,21 @@ const defaultQuestions = JSON.stringify(
 );
 
 function summarizeError(error: unknown, fallback: string) {
-  if (typeof error === "object" && error && "response" in error) {
-    const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
-    if (typeof detail === "string") return detail;
-  }
-  return fallback;
+  return summarizeFormError(error, fallback);
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function createId(prefix: string): string {
+  const base = slugify(prefix);
+  const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+  return base ? `${base}-${suffix}` : suffix;
 }
 
 export default function AdminCatalogPage() {
@@ -50,13 +62,13 @@ export default function AdminCatalogPage() {
   const [loading, setLoading] = useState(false);
   const [moduleMode, setModuleMode] = useState<"create" | "edit">("create");
   const [moduleForm, setModuleForm] = useState({
-    id: "",
+    id: createId("module"),
     display_name: "",
     description: "",
   });
   const [quizMode, setQuizMode] = useState<"create" | "edit">("create");
   const [quizForm, setQuizForm] = useState({
-    id: "",
+    id: createId("quiz"),
     display_name: "",
     module_id: "",
     questionsJson: defaultQuestions,
@@ -79,13 +91,13 @@ export default function AdminCatalogPage() {
 
   function resetModuleForm() {
     setModuleMode("create");
-    setModuleForm({ id: "", display_name: "", description: "" });
+    setModuleForm({ id: createId("module"), display_name: "", description: "" });
   }
 
   function resetQuizForm() {
     setQuizMode("create");
     setQuizForm({
-      id: "",
+      id: createId("quiz"),
       display_name: "",
       module_id: "",
       questionsJson: defaultQuestions,
@@ -97,16 +109,21 @@ export default function AdminCatalogPage() {
     setMessage(null);
 
     try {
+      const parsed = moduleSchema.safeParse(moduleForm);
+      if (!parsed.success) {
+        throw parsed.error;
+      }
+
       if (moduleMode === "create") {
         await api.post("/admin/modules", {
-          id: moduleForm.id,
-          display_name: moduleForm.display_name,
-          description: moduleForm.description || null,
+          id: parsed.data.id || createId(parsed.data.display_name),
+          display_name: parsed.data.display_name,
+          description: parsed.data.description || null,
         });
       } else {
-        await api.put(`/admin/modules/${moduleForm.id}`, {
-          display_name: moduleForm.display_name,
-          description: moduleForm.description || null,
+        await api.put(`/admin/modules/${parsed.data.id}`, {
+          display_name: parsed.data.display_name,
+          description: parsed.data.description || null,
         });
       }
 
@@ -114,7 +131,7 @@ export default function AdminCatalogPage() {
       setMessage(moduleMode === "create" ? "Module created." : "Module updated.");
       resetModuleForm();
     } catch (error) {
-      setMessage(summarizeError(error, "Could not save the module."));
+      setMessage(`Could not save the module. ${summarizeError(error, "Check the fields and try again.")}`);
     } finally {
       setLoading(false);
     }
@@ -134,7 +151,7 @@ export default function AdminCatalogPage() {
         questionsJson: JSON.stringify(data.questions, null, 2),
       });
     } catch (error) {
-      setMessage(summarizeError(error, "Could not load the quiz."));
+      setMessage(`Could not load the quiz. ${summarizeError(error, "Try again.")}`);
     } finally {
       setLoading(false);
     }
@@ -145,24 +162,52 @@ export default function AdminCatalogPage() {
     setMessage(null);
 
     try {
-      const payload: QuizUpsertIn = {
+      const parsed = quizSchema.safeParse({
         id: quizForm.id,
         display_name: quizForm.display_name,
         module_id: quizForm.module_id || null,
         questions: JSON.parse(quizForm.questionsJson),
+      });
+      if (!parsed.success) {
+        throw parsed.error;
+      }
+
+      const payload: QuizUpsertIn = {
+        id: parsed.data.id || createId(parsed.data.display_name),
+        display_name: parsed.data.display_name,
+        module_id: parsed.data.module_id ?? null,
+        questions: parsed.data.questions.map((question) => ({
+          question_number: question.question_number,
+          question_text: question.question_text,
+          question_image_url: question.question_image_url ?? null,
+          choice_a: question.choice_a,
+          choice_a_image_url: question.choice_a_image_url ?? null,
+          choice_b: question.choice_b,
+          choice_b_image_url: question.choice_b_image_url ?? null,
+          choice_c: question.choice_c ?? null,
+          choice_c_image_url: question.choice_c_image_url ?? null,
+          choice_d: question.choice_d ?? null,
+          choice_d_image_url: question.choice_d_image_url ?? null,
+          choice_e: question.choice_e ?? null,
+          choice_e_image_url: question.choice_e_image_url ?? null,
+          choice_f: question.choice_f ?? null,
+          choice_f_image_url: question.choice_f_image_url ?? null,
+          correct_answer: question.correct_answer,
+          difficulty: question.difficulty ?? null,
+        })),
       };
 
       if (quizMode === "create") {
         await api.post("/admin/quizzes", payload);
       } else {
-        await api.put(`/admin/quizzes/${quizForm.id}`, payload);
+        await api.put(`/admin/quizzes/${payload.id}`, payload);
       }
 
       await loadCatalog();
       setMessage(quizMode === "create" ? "Quiz created." : "Quiz updated.");
       resetQuizForm();
     } catch (error) {
-      setMessage(summarizeError(error, "Could not save the quiz. Make sure the questions JSON is valid."));
+      setMessage(`Could not save the quiz. ${summarizeError(error, "Make sure the questions JSON is valid.")}`);
     } finally {
       setLoading(false);
     }
@@ -185,16 +230,17 @@ export default function AdminCatalogPage() {
           </div>
           <div className="grid gap-4">
             <Input
-              placeholder="Module id, for example c-development"
-              value={moduleForm.id}
-              disabled={moduleMode === "edit"}
-              onChange={(event) => setModuleForm((current) => ({ ...current, id: event.target.value }))}
-            />
-            <Input
               placeholder="Display name"
               value={moduleForm.display_name}
-              onChange={(event) => setModuleForm((current) => ({ ...current, display_name: event.target.value }))}
+              onChange={(event) => {
+                const display_name = event.target.value;
+                setModuleForm((current) => ({
+                  ...current,
+                  display_name,
+                }));
+              }}
             />
+            <p className="text-xs text-ink/55">Module id is generated automatically from the display name.</p>
             <Textarea
               placeholder="Short description for this module"
               value={moduleForm.description}
@@ -257,16 +303,17 @@ export default function AdminCatalogPage() {
           </div>
           <div className="grid gap-4">
             <Input
-              placeholder="Quiz id"
-              value={quizForm.id}
-              disabled={quizMode === "edit"}
-              onChange={(event) => setQuizForm((current) => ({ ...current, id: event.target.value }))}
-            />
-            <Input
               placeholder="Quiz display name"
               value={quizForm.display_name}
-              onChange={(event) => setQuizForm((current) => ({ ...current, display_name: event.target.value }))}
+              onChange={(event) => {
+                const display_name = event.target.value;
+                setQuizForm((current) => ({
+                  ...current,
+                  display_name,
+                }));
+              }}
             />
+            <p className="text-xs text-ink/55">Quiz id is generated automatically from the display name.</p>
             <select
               className="w-full rounded-3xl border border-ink/15 bg-white/82 px-4 py-3 text-sm text-ink outline-none transition duration-300 ease-out hover:border-ink/25 focus:border-clay"
               value={quizForm.module_id}

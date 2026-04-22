@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
 import api from "@/lib/api";
+import { summarizeFormError } from "@/lib/form";
+import { jsonTextSchema } from "@/lib/validation";
 import type { ImportOut } from "@/lib/types";
 
 export default function AdminImportPage() {
@@ -17,13 +19,7 @@ export default function AdminImportPage() {
   const [loading, setLoading] = useState(false);
 
   function summarizeError(error: unknown) {
-    if (typeof error === "object" && error && "response" in error) {
-      const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
-      if (typeof detail === "string") {
-        return detail;
-      }
-    }
-    return "Import failed.";
+    return summarizeFormError(error, "Import failed.");
   }
 
   async function uploadForm(form: FormData) {
@@ -55,7 +51,10 @@ export default function AdminImportPage() {
           variant="secondary"
           disabled={!file || loading}
           onClick={() => {
-            if (!file) return;
+            if (!file) {
+              setMessage("Select a file first.");
+              return;
+            }
             const form = new FormData();
             form.append("file", file);
             void uploadForm(form);
@@ -71,6 +70,11 @@ export default function AdminImportPage() {
           variant="secondary"
           disabled={loading || !jsonText.trim()}
           onClick={() => {
+            const parsed = jsonTextSchema.safeParse({ jsonText });
+            if (!parsed.success) {
+              setMessage(summarizeFormError(parsed.error, "Paste valid JSON first."));
+              return;
+            }
             const blob = new Blob([jsonText], { type: "application/json" });
             const form = new FormData();
             form.append("file", blob, "import.json");

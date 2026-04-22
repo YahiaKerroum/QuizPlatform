@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS students (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS profiles (
+    user_id UUID PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('student', 'admin')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,

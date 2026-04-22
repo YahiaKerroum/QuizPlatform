@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
+from postgrest import AsyncPostgrestClient
 
+from ..auth import get_current_admin
 from ..database import get_db
 from ..schemas import (
     AdminQuizDetailOut,
@@ -12,6 +13,8 @@ from ..schemas import (
     ModuleCreateIn,
     ModuleOut,
     ModuleUpdateIn,
+    ProfileRoleOut,
+    ProfileRoleSetIn,
     QuizDetailOut,
     QuizSummaryOut,
     QuizUpsertIn,
@@ -31,14 +34,20 @@ from ..services.catalog_service import (
 )
 from ..services.export_service import stream_answers_csv
 from ..services.import_service import parse_csv, parse_json, process_import
+from ..services.profile_service import list_profiles, set_profile_role
 
 router = APIRouter()
+
+
+def _ensure_admin(_admin_user: dict = Depends(get_current_admin)) -> None:
+    return None
 
 
 @router.post("/import", response_model=ImportOut)
 async def import_questions(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> ImportOut:
     content = await file.read()
     filename = (file.filename or "").lower()
@@ -66,7 +75,8 @@ async def import_questions(
 @router.post("/students/synthetic/bulk", response_model=list[SyntheticStudentOut])
 async def bulk_create_synthetic_students(
     payload: BulkStudentsIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> list[SyntheticStudentOut]:
     created = await create_synthetic_students(db, payload)
     return [SyntheticStudentOut.model_validate(item) for item in created]
@@ -75,7 +85,8 @@ async def bulk_create_synthetic_students(
 @router.post("/simulate/batch", response_model=SimBatchOut)
 async def run_simulation_batch(
     payload: SimBatchIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> SimBatchOut:
     return await simulate_batch(db, payload)
 
@@ -83,20 +94,25 @@ async def run_simulation_batch(
 @router.post("/questions/difficulty", response_model=DifficultyOut)
 async def set_question_difficulty(
     payload: DifficultyIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> DifficultyOut:
     return await update_question_difficulties(db, payload)
 
 
 @router.get("/modules", response_model=list[ModuleOut])
-async def get_modules(db: AsyncSession = Depends(get_db)) -> list[ModuleOut]:
+async def get_modules(
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
+) -> list[ModuleOut]:
     return await list_modules(db)
 
 
 @router.post("/modules", response_model=ModuleOut, status_code=status.HTTP_201_CREATED)
 async def add_module(
     payload: ModuleCreateIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> ModuleOut:
     return await create_module(db, payload)
 
@@ -105,25 +121,34 @@ async def add_module(
 async def edit_module(
     module_id: str,
     payload: ModuleUpdateIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> ModuleOut:
     return await update_module(db, module_id, payload)
 
 
 @router.get("/quizzes", response_model=list[QuizSummaryOut])
-async def get_admin_quizzes(db: AsyncSession = Depends(get_db)) -> list[QuizSummaryOut]:
+async def get_admin_quizzes(
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
+) -> list[QuizSummaryOut]:
     return await list_quizzes(db)
 
 
 @router.get("/quizzes/{quiz_id}", response_model=AdminQuizDetailOut)
-async def get_admin_quiz(quiz_id: str, db: AsyncSession = Depends(get_db)) -> AdminQuizDetailOut:
+async def get_admin_quiz(
+    quiz_id: str,
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
+) -> AdminQuizDetailOut:
     return await get_admin_quiz_detail(db, quiz_id)
 
 
 @router.post("/quizzes", response_model=AdminQuizDetailOut, status_code=status.HTTP_201_CREATED)
 async def add_quiz(
     payload: QuizUpsertIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> AdminQuizDetailOut:
     return await create_quiz(db, payload)
 
@@ -132,15 +157,33 @@ async def add_quiz(
 async def edit_quiz(
     quiz_id: str,
     payload: QuizUpsertIn,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
 ) -> AdminQuizDetailOut:
     return await update_quiz(db, quiz_id, payload)
 
 
 @router.get("/export/answers")
-async def export_answers() -> StreamingResponse:
+async def export_answers(_: None = Depends(_ensure_admin)) -> StreamingResponse:
     return StreamingResponse(
         stream_answers_csv(),
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="responses.csv"'},
     )
+
+
+@router.get("/profiles", response_model=list[ProfileRoleOut])
+async def get_profiles(
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
+) -> list[ProfileRoleOut]:
+    return await list_profiles(db)
+
+
+@router.put("/profiles/role", response_model=ProfileRoleOut)
+async def update_profile_role(
+    payload: ProfileRoleSetIn,
+    db: AsyncPostgrestClient = Depends(get_db),
+    _: None = Depends(_ensure_admin),
+) -> ProfileRoleOut:
+    return await set_profile_role(db, payload)
