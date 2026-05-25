@@ -1,0 +1,45 @@
+\contentsline {section}{\numberline {1}Presentation Roadmap}{4}{section.1}%
+\contentsline {section}{\numberline {2}Introduction}{4}{section.2}%
+\contentsline {section}{\numberline {3}Dataset and Question Bank Curation}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Raw data source}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Three-stage filtering}{5}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Difficulty labelling}{5}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Synthetic Student Population}{6}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Population model}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Per-level generative model}{6}{subsection.4.2}%
+\contentsline {section}{\numberline {5}Feature Engineering}{7}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Feature groups}{7}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Self-normalised time features}{7}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Variance and gap features}{8}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Multi-Module Model}{8}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Architecture}{8}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Feature ablation}{8}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Calibration}{9}{subsection.6.3}%
+\contentsline {section}{\numberline {7}Adaptive Strategies}{9}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Results}{9}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Statistical significance}{9}{subsection.7.2}%
+\contentsline {section}{\numberline {8}Real Data Validation}{10}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Online inflation}{10}{subsection.8.1}%
+\contentsline {section}{\numberline {9}Single-Module Model Evolution}{10}{section.9}%
+\contentsline {subsection}{\numberline {9.1}v1: Logistic Regression baseline}{10}{subsection.9.1}%
+\contentsline {subsection}{\numberline {9.2}v2: Calibrated LogReg with grid search}{11}{subsection.9.2}%
+\contentsline {subsection}{\numberline {9.3}v3: HistGradientBoosting, 21 features}{11}{subsection.9.3}%
+\contentsline {subsection}{\numberline {9.4}v4: Realistic distribution, 8-question sessions}{11}{subsection.9.4}%
+\contentsline {section}{\numberline {10}Adaptive Confidence Thresholds}{12}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Motivation}{12}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Length-conditional design}{12}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Practical effect}{13}{subsection.10.3}%
+\contentsline {section}{\numberline {11}Platform Integration}{13}{section.11}%
+\contentsline {subsection}{\numberline {11.1}Architecture}{13}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}ML service API}{13}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}Model loading}{14}{subsection.11.3}%
+\contentsline {subsection}{\numberline {11.4}Session flow}{14}{subsection.11.4}%
+\contentsline {section}{\numberline {12}What We Discovered Along the Way}{14}{section.12}%
+\contentsline {subsection}{\numberline {12.1}Why multi-module classification is easier than single-module}{14}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}The structural problem with course-specific quiz data}{15}{subsection.12.2}%
+\contentsline {subsection}{\numberline {12.3}The Data Mining quiz grade inflation problem}{15}{subsection.12.3}%
+\contentsline {subsection}{\numberline {12.4}Why we moved from raw response time to time-accuracy interaction}{16}{subsection.12.4}%
+\contentsline {subsection}{\numberline {12.5}Why Logistic Regression hits a ceiling on intermediate classification}{16}{subsection.12.5}%
+\contentsline {subsection}{\numberline {12.6}The difficulty labelling gap}{17}{subsection.12.6}%
+\contentsline {section}{\numberline {13}Limitations and Honest Assessment}{18}{section.13}%
+\contentsline {section}{\numberline {14}Conclusion}{18}{section.14}%

@@ -1,0 +1,41 @@
+{
+  "cv_mean": 0.9545286055699165,
+  "cv_std": 0.016559716748955487,
+  "cv_scores": [
+    0.9261083743842364,
+    0.9554455445544554,
+    0.9504950495049505,
+    0.9752475247524752,
+    0.9653465346534653
+  ],
+  "n_folds": 5,
+  "leakage_note": "PWWR recomputed on training fold only \u2014 leakage-free",
+  "level_distribution": {
+    "intermediate": 506,
+    "beginner": 442,
+    "advanced": 63
+  },
+  "n_students": 1011,
+  "n_features": 16,
+  "feature_names": [
+    "overall_acc",
+    "acc_easy",
+    "acc_medium",
+    "acc_hard",
+    "has_easy",
+    "has_medium",
+    "has_hard",
+    "diff_discrimination",
+    "last3_acc",
+    "error_streak",
+    "correct_streak",
+    "acc_trend",
+    "avg_time_norm",
+    "n_seen_norm",
+    "acc_std",
+    "lecture_view_norm"
+  ],
+  "majority_class_baseline": 0.5004945598417408,
+  "answer_key": "official (EdNet-Contents/contents/questions.csv)",
+  "note": "lecture_view_norm = n_read_actions / n_questions_answered"
+}

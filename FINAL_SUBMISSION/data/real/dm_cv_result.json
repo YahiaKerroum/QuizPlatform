@@ -1,0 +1,51 @@
+{
+  "n_students": 120,
+  "n_features": 13,
+  "feature_names": [
+    "overall_acc",
+    "acc_easy",
+    "acc_medium",
+    "acc_hard",
+    "has_easy",
+    "has_medium",
+    "has_hard",
+    "diff_discrimination",
+    "last3_acc",
+    "error_streak",
+    "correct_streak",
+    "acc_trend",
+    "avg_time_norm"
+  ],
+  "online_inflation": {
+    "quiz_mean": 0.8361623677248677,
+    "grade_mean": 0.5605729166666668,
+    "mean_gap": 0.27558945105820104,
+    "students_inflated_10pp": 103,
+    "pct_inflated": 0.8583333333333333,
+    "quiz_grade_correlation": 0.14043623782641054
+  },
+  "cv_grade_based": {
+    "cv_mean": 0.4083333333333334,
+    "cv_std": 0.0927960727138337,
+    "majority_class_baseline": 0.625,
+    "improvement_over_baseline": -0.21666666666666662,
+    "n_splits": 5,
+    "level_distribution": {
+      "intermediate": 75,
+      "beginner": 24,
+      "advanced": 21
+    }
+  },
+  "cv_quiz_based": {
+    "cv_mean": 0.975,
+    "cv_std": 0.01443375672974064,
+    "majority_class_baseline": 0.9666666666666667,
+    "improvement_over_baseline": 0.008333333333333304,
+    "n_splits": 4,
+    "level_distribution": {
+      "advanced": 116,
+      "intermediate": 4
+    }
+  },
+  "interpretation": "Grade-based CV is low because online quizzes and in-person exams measure different things. 86% of students score >10pp higher online. Quiz-based CV is trivially high because 97% of students are classified 'advanced' from online scores. Neither label is a reliable ground truth for pipeline generalisation. DM data is best used as an illustration of online-inflation bias, not as a clean generalisation benchmark."
+}

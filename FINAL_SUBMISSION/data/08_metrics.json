@@ -1,0 +1,297 @@
+{
+  "summary_table": [
+    {
+      "strategy": "uncertainty",
+      "questions_to_85pct": 6,
+      "final_accuracy_step30": 0.9583333333333334,
+      "accuracy_step10": 0.90625
+    },
+    {
+      "strategy": "random",
+      "questions_to_85pct": 9,
+      "final_accuracy_step30": 0.9479166666666666,
+      "accuracy_step10": 0.875
+    },
+    {
+      "strategy": "qbc",
+      "questions_to_85pct": 15,
+      "final_accuracy_step30": 0.96875,
+      "accuracy_step10": 0.7395833333333334
+    },
+    {
+      "strategy": "entropy",
+      "questions_to_85pct": 16,
+      "final_accuracy_step30": 0.9583333333333334,
+      "accuracy_step10": 0.7604166666666666
+    }
+  ],
+  "best_adaptive_strategy": "uncertainty",
+  "accuracy_target": 0.85,
+  "questions_to_85_best": 6,
+  "questions_to_85_random": 9,
+  "questions_to_target_best": 6,
+  "questions_to_target_random": 9,
+  "cv_mean": 0.8606801093643199,
+  "selected_model": "LogisticRegression",
+  "feature_count": 18,
+  "feature_names": [
+    "overall_acc",
+    "acc_easy",
+    "acc_medium",
+    "acc_hard",
+    "has_easy",
+    "has_medium",
+    "has_hard",
+    "diff_discrimination",
+    "last3_acc",
+    "error_streak",
+    "correct_streak",
+    "acc_trend",
+    "avg_time",
+    "time_trend",
+    "n_seen_norm",
+    "n_subtopics_norm",
+    "subtopic_variance",
+    "subtopic_range"
+  ],
+  "feature_ablation": {
+    "cv_13": 0.862406015037594,
+    "cv_16": 0.8611130097972204,
+    "cv_18": 0.8606801093643199,
+    "delta_13_16": -0.0012930052403735,
+    "delta_16_18": -0.0004329004329004,
+    "delta_13_18": -0.001725905673274,
+    "delta": -0.001725905673274
+  },
+  "feature_permutation": [
+    {
+      "feature": "avg_time",
+      "mean_importance": 0.4893229166666667,
+      "std_importance": 0.0252066653201588
+    },
+    {
+      "feature": "overall_acc",
+      "mean_importance": 0.0921875,
+      "std_importance": 0.0133905834710233
+    },
+    {
+      "feature": "acc_hard",
+      "mean_importance": 0.0645833333333333,
+      "std_importance": 0.0109746393258882
+    },
+    {
+      "feature": "acc_medium",
+      "mean_importance": 0.0575520833333333,
+      "std_importance": 0.01173031836412
+    },
+    {
+      "feature": "acc_easy",
+      "mean_importance": 0.0216145833333333,
+      "std_importance": 0.0133829845390933
+    },
+    {
+      "feature": "diff_discrimination",
+      "mean_importance": 0.0184895833333333,
+      "std_importance": 0.0059895833333333
+    },
+    {
+      "feature": "last3_acc",
+      "mean_importance": 0.0140625,
+      "std_importance": 0.0051031036307982
+    },
+    {
+      "feature": "n_subtopics_norm",
+      "mean_importance": 0.00546875,
+      "std_importance": 0.0033854166666666
+    },
+    {
+      "feature": "correct_streak",
+      "mean_importance": 0.0005208333333333,
+      "std_importance": 0.0025515518153991
+    },
+    {
+      "feature": "n_seen_norm",
+      "mean_importance": 0.0,
+      "std_importance": 0.0
+    },
+    {
+      "feature": "error_streak",
+      "mean_importance": 0.0,
+      "std_importance": 0.0
+    },
+    {
+      "feature": "has_hard",
+      "mean_importance": 0.0,
+      "std_importance": 0.0
+    },
+    {
+      "feature": "has_medium",
+      "mean_importance": 0.0,
+      "std_importance": 0.0
+    },
+    {
+      "feature": "has_easy",
+      "mean_importance": 0.0,
+      "std_importance": 0.0
+    },
+    {
+      "feature": "subtopic_variance",
+      "mean_importance": -0.0005208333333332,
+      "std_importance": 0.0046292679256852
+    },
+    {
+      "feature": "subtopic_range",
+      "mean_importance": -0.0005208333333333,
+      "std_importance": 0.0015624999999999
+    },
+    {
+      "feature": "acc_trend",
+      "mean_importance": -0.0013020833333332,
+      "std_importance": 0.00390625
+    },
+    {
+      "feature": "time_trend",
+      "mean_importance": -0.0018229166666666,
+      "std_importance": 0.001193379087228
+    }
+  ],
+  "feature_permutation_subtopic_block": 0.0044270833333335,
+  "feature_permutation_global_block": 0.7552083333333335,
+  "subtopic_coverage": [
+    {
+      "quiz_id": "artificial-intelligence",
+      "n_questions": 699,
+      "n_with_subtopic": 670,
+      "n_unique_subtopics": 57,
+      "coverage_rate": 0.9585121602288984
+    },
+    {
+      "quiz_id": "computer-fundamentals",
+      "n_questions": 948,
+      "n_with_subtopic": 948,
+      "n_unique_subtopics": 101,
+      "coverage_rate": 1.0
+    },
+    {
+      "quiz_id": "cpp-programming",
+      "n_questions": 847,
+      "n_with_subtopic": 847,
+      "n_unique_subtopics": 111,
+      "coverage_rate": 1.0
+    },
+    {
+      "quiz_id": "cyber-security",
+      "n_questions": 974,
+      "n_with_subtopic": 954,
+      "n_unique_subtopics": 57,
+      "coverage_rate": 0.9794661190965092
+    },
+    {
+      "quiz_id": "data-structure",
+      "n_questions": 929,
+      "n_with_subtopic": 906,
+      "n_unique_subtopics": 108,
+      "coverage_rate": 0.9752421959095802
+    },
+    {
+      "quiz_id": "java",
+      "n_questions": 928,
+      "n_with_subtopic": 924,
+      "n_unique_subtopics": 139,
+      "coverage_rate": 0.9956896551724138
+    },
+    {
+      "quiz_id": "machine-learning",
+      "n_questions": 458,
+      "n_with_subtopic": 449,
+      "n_unique_subtopics": 52,
+      "coverage_rate": 0.980349344978166
+    },
+    {
+      "quiz_id": "operating-system",
+      "n_questions": 1040,
+      "n_with_subtopic": 1016,
+      "n_unique_subtopics": 86,
+      "coverage_rate": 0.9769230769230768
+    },
+    {
+      "quiz_id": "python",
+      "n_questions": 720,
+      "n_with_subtopic": 692,
+      "n_unique_subtopics": 46,
+      "coverage_rate": 0.9611111111111112
+    },
+    {
+      "quiz_id": "software-engineering",
+      "n_questions": 1018,
+      "n_with_subtopic": 976,
+      "n_unique_subtopics": 84,
+      "coverage_rate": 0.9587426326129664
+    }
+  ],
+  "n_modules": 10,
+  "modules": [
+    "computer-fundamentals",
+    "cpp-programming",
+    "cyber-security",
+    "data-structure",
+    "operating-system",
+    "software-engineering",
+    "java",
+    "python",
+    "artificial-intelligence",
+    "machine-learning"
+  ],
+  "n_students": 480,
+  "n_regular": 450,
+  "n_borderline": 30,
+  "n_test_borderline": 6,
+  "n_test_nonborderline": 90,
+  "population_mu": 0.55,
+  "population_sigma": 0.18,
+  "level_distribution": {
+    "beginner": 140,
+    "intermediate": 254,
+    "advanced": 86
+  },
+  "borderline_step10_gap_mean": 0.16666666666666666,
+  "borderline_step10_gap_ci_low": 0.0,
+  "borderline_step10_gap_ci_high": 0.5,
+  "overall_step10_gap_mean": 0.03125,
+  "overall_step10_gap_ci_low": -0.052083333333333336,
+  "overall_step10_gap_ci_high": 0.11458333333333333,
+  "auqc_summary": [
+    {
+      "strategy": "uncertainty",
+      "auqc_overall": 0.9024305555555555,
+      "auqc_borderline": 0.7888888888888886,
+      "auqc_nonborderline": 0.9099999999999998
+    },
+    {
+      "strategy": "random",
+      "auqc_overall": 0.8642361111111114,
+      "auqc_borderline": 0.6888888888888887,
+      "auqc_nonborderline": 0.875925925925926
+    },
+    {
+      "strategy": "entropy",
+      "auqc_overall": 0.8281250000000001,
+      "auqc_borderline": 0.6444444444444443,
+      "auqc_nonborderline": 0.8403703703703702
+    },
+    {
+      "strategy": "qbc",
+      "auqc_overall": 0.8177083333333333,
+      "auqc_borderline": 0.6333333333333332,
+      "auqc_nonborderline": 0.8300000000000001
+    }
+  ],
+  "sensitivity_difficulty_step10_gap": {
+    "easy_heavy": 0.10199999999999998,
+    "balanced": 0.04899999999999993,
+    "hard_heavy": -0.0010000000000000009
+  },
+  "question_reduction_vs_random": 0.33333333333333337,
+  "validation_complete": true,
+  "validation_agreement": 0.54
+}

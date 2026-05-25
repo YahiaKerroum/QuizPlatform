@@ -1,0 +1,11 @@
+{
+  "included_questions": 159,
+  "included_modules": [
+    "ite-real",
+    "os-real"
+  ],
+  "interaction_rows": 42992,
+  "exact_key_quizzes": 16,
+  "total_quizzes": 22,
+  "extended_bank_rows": 2015
+}
