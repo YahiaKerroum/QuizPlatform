@@ -97,6 +97,7 @@ export interface SessionStartOut {
   question: QuestionOut;
   question_number: number;
   total: number;
+  is_adaptive: boolean;
 }
 
 export interface AnswerOut {
@@ -105,6 +106,8 @@ export interface AnswerOut {
   question_number: number | null;
   total: number | null;
   session_id: string | null;
+  predicted_level: "beginner" | "intermediate" | "advanced" | null;
+  confidence: number | null;
 }
 
 export interface QuestionResultOut {
@@ -140,6 +143,7 @@ export interface SessionHistoryOut {
   total: number;
   correct: number;
   accuracy: number;
+  is_adaptive: boolean;
 }
 
 export interface ImportOut {

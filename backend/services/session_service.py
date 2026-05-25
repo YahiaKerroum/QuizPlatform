@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Answer, Question, Quiz, Session, Student
 from ..schemas import AnswerIn, AnswerOut, QuestionOut, QuestionResultOut, ResultOut, SessionHistoryOut, SessionStartOut
+from . import ml_service
 
 VALID_CHOICES = {"a", "b", "c", "d", "e", "f"}
 
@@ -48,7 +49,7 @@ async def _get_session_for_student(
     return session
 
 
-async def create_session(db: AsyncSession, student: Student, quiz_id: str) -> SessionStartOut:
+async def create_session(db: AsyncSession, student: Student, quiz_id: str, adaptive: bool = False) -> SessionStartOut:
     quiz = await db.get(Quiz, quiz_id)
     if quiz is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found.")
@@ -60,22 +61,36 @@ async def create_session(db: AsyncSession, student: Student, quiz_id: str) -> Se
             detail="Quiz has no questions.",
         )
 
-    first_question = await db.get(Question, (quiz_id, 1))
+    if adaptive:
+        # Cold-start: pick the easiest available question first
+        result = await db.execute(
+            select(Question)
+            .where(Question.quiz_id == quiz_id, Question.difficulty == "easy")
+            .order_by(Question.question_number)
+            .limit(1)
+        )
+        first_question = result.scalar_one_or_none()
+        if first_question is None:
+            first_question = await db.get(Question, (quiz_id, 1))
+    else:
+        first_question = await db.get(Question, (quiz_id, 1))
+
     if first_question is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Quiz questions must start at question_number 1.",
         )
 
-    session = Session(student_id=student.id, quiz_id=quiz_id)
+    session = Session(student_id=student.id, quiz_id=quiz_id, is_adaptive=adaptive)
     db.add(session)
     await db.flush()
 
     return SessionStartOut(
         session_id=session.id,
         question=_serialize_question(first_question),
-        question_number=1,
+        question_number=first_question.question_number,
         total=int(total),
+        is_adaptive=adaptive,
     )
 
 
@@ -92,18 +107,27 @@ async def submit_answer(
             detail="Session is already complete.",
         )
 
-    expected_question_number = int(
-        await db.scalar(
-            select(func.count()).select_from(Answer).where(Answer.session_id == session.id)
+    if session.is_adaptive:
+        # Adaptive: any unanswered question is valid — no sequential order enforced
+        already = await db.scalar(
+            select(func.count()).select_from(Answer).where(
+                and_(Answer.session_id == session.id, Answer.question_number == answer_in.question_number)
+            )
         )
-        or 0
-    ) + 1
-
-    if answer_in.question_number != expected_question_number:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Expected question_number {expected_question_number}.",
-        )
+        if already:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question already answered.")
+    else:
+        expected_question_number = int(
+            await db.scalar(
+                select(func.count()).select_from(Answer).where(Answer.session_id == session.id)
+            )
+            or 0
+        ) + 1
+        if answer_in.question_number != expected_question_number:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Expected question_number {expected_question_number}.",
+            )
 
     if answer_in.response_time_ms <= 0 or answer_in.response_time_ms >= 600000:
         raise HTTPException(
@@ -130,18 +154,92 @@ async def submit_answer(
     db.add(answer)
     await db.flush()
 
+    total = await db.scalar(select(func.count()).select_from(Question).where(Question.quiz_id == session.quiz_id))
+
+    if session.is_adaptive:
+        return await _submit_adaptive(db, session, int(total or 0))
+
     next_question = await db.get(Question, (session.quiz_id, expected_question_number + 1))
     if next_question is None:
         session.ended_at = datetime.now(timezone.utc)
         await db.flush()
         return AnswerOut(done=True, session_id=session.id)
 
-    total = await db.scalar(select(func.count()).select_from(Question).where(Question.quiz_id == session.quiz_id))
     return AnswerOut(
         done=False,
         question=_serialize_question(next_question),
         question_number=next_question.question_number,
         total=int(total or 0),
+    )
+
+
+async def _submit_adaptive(db: AsyncSession, session: Session, total: int) -> AnswerOut:
+    """Select the next question using the ML model and check the stop criterion."""
+    # Load full answer history for this session
+    history_result = await db.execute(
+        select(Answer, Question)
+        .join(Question, and_(Question.quiz_id == Answer.quiz_id, Question.question_number == Answer.question_number))
+        .where(Answer.session_id == session.id)
+        .order_by(Answer.answered_at.asc())
+    )
+    history_rows = history_result.all()
+    n_answered = len(history_rows)
+
+    is_correct_list = [bool(a.is_correct) for a, _ in history_rows]
+    difficulty_list = [q.difficulty for _, q in history_rows]
+    time_ms_list    = [int(a.response_time_ms) for a, _ in history_rows]
+
+    # Use the quiz's module_id so per-module features match training slugs
+    quiz_obj = await db.get(Quiz, session.quiz_id)
+    quiz_module = quiz_obj.module_id if quiz_obj and quiz_obj.module_id else None
+    module_list = [quiz_module] * n_answered
+
+    features = ml_service.compute_features(is_correct_list, difficulty_list, time_ms_list, module_list)
+    prediction = ml_service.predict_level(features)
+    predicted_level = prediction["level"]
+    confidence      = prediction["confidence"]
+
+    # Check stop criterion
+    if ml_service.should_stop(features, n_answered):
+        session.ended_at = datetime.now(timezone.utc)
+        await db.flush()
+        return AnswerOut(
+            done=True,
+            session_id=session.id,
+            predicted_level=predicted_level,
+            confidence=confidence,
+        )
+
+    # Load all unanswered questions
+    answered_nums_result = await db.execute(
+        select(Answer.question_number).where(Answer.session_id == session.id)
+    )
+    answered_nums = {row[0] for row in answered_nums_result.all()}
+
+    remaining_result = await db.execute(
+        select(Question)
+        .where(Question.quiz_id == session.quiz_id)
+        .order_by(Question.question_number)
+    )
+    remaining = [q for q in remaining_result.scalars().all() if q.question_number not in answered_nums]
+
+    if not remaining:
+        session.ended_at = datetime.now(timezone.utc)
+        await db.flush()
+        return AnswerOut(done=True, session_id=session.id, predicted_level=predicted_level, confidence=confidence)
+
+    candidate_nums  = [q.question_number for q in remaining]
+    candidate_diffs = [q.difficulty for q in remaining]
+    next_num = ml_service.select_next_question(features, candidate_nums, candidate_diffs, strategy="entropy")
+    next_question = next((q for q in remaining if q.question_number == next_num), remaining[0])
+
+    return AnswerOut(
+        done=False,
+        question=_serialize_question(next_question),
+        question_number=next_question.question_number,
+        total=total,
+        predicted_level=predicted_level,
+        confidence=confidence,
     )
 
 
@@ -221,6 +319,7 @@ async def list_session_history(db: AsyncSession, student: Student) -> list[Sessi
         select(
             Session.id.label("session_id"),
             Session.quiz_id,
+            Session.is_adaptive,
             Quiz.display_name,
             Session.started_at,
             Session.ended_at,
@@ -230,7 +329,7 @@ async def list_session_history(db: AsyncSession, student: Student) -> list[Sessi
         .join(Quiz, Quiz.id == Session.quiz_id)
         .outerjoin(Answer, Answer.session_id == Session.id)
         .where(Session.student_id == student.id)
-        .group_by(Session.id, Session.quiz_id, Quiz.display_name, Session.started_at, Session.ended_at)
+        .group_by(Session.id, Session.quiz_id, Session.is_adaptive, Quiz.display_name, Session.started_at, Session.ended_at)
         .order_by(Session.started_at.desc())
     )
 
@@ -248,6 +347,7 @@ async def list_session_history(db: AsyncSession, student: Student) -> list[Sessi
                 total=total,
                 correct=correct,
                 accuracy=(correct / total) if total else 0.0,
+                is_adaptive=bool(row.is_adaptive),
             )
         )
     return history

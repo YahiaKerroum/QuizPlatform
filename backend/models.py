@@ -149,6 +149,7 @@ class Session(Base):
         server_default=func.now(),
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    is_adaptive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     student: Mapped["Student"] = relationship(
         back_populates="sessions",

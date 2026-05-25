@@ -41,6 +41,12 @@ export default function QuizPage() {
   return <QuizSessionView initialData={initialData} sessionId={params.sessionId} />;
 }
 
+const LEVEL_COLORS = {
+  beginner: "bg-amber-100 text-amber-800 border-amber-200",
+  intermediate: "bg-blue-100 text-blue-800 border-blue-200",
+  advanced: "bg-emerald-100 text-emerald-800 border-emerald-200",
+};
+
 function QuizSessionView({
   initialData,
   sessionId,
@@ -58,11 +64,29 @@ function QuizSessionView({
     }
   }, [quiz.state.done, router, sessionId]);
 
+  const { predictedLevel, confidence, isAdaptive } = quiz.state;
+
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex-1">
+        <div className="flex flex-1 flex-col gap-3">
           <QuizProgress value={quiz.state.questionNumber} total={quiz.state.total} />
+          {isAdaptive && (
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                Adaptive mode
+              </span>
+              {predictedLevel && (
+                <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition-all ${LEVEL_COLORS[predictedLevel]}`}>
+                  {predictedLevel}
+                  {confidence !== null && (
+                    <span className="ml-1 opacity-70">{Math.round(confidence * 100)}%</span>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 self-end md:self-auto">
           <QuizTimer elapsed={elapsed} />

@@ -20,6 +20,7 @@ class LoginIn(APIModel):
 
 class SessionStartIn(APIModel):
     quiz_id: str = Field(min_length=1)
+    adaptive: bool = False
 
 
 class AnswerIn(APIModel):
@@ -146,6 +147,7 @@ class SessionStartOut(APIModel):
     question: QuestionOut
     question_number: int
     total: int
+    is_adaptive: bool = False
 
 
 class AnswerOut(APIModel):
@@ -154,6 +156,8 @@ class AnswerOut(APIModel):
     question_number: int | None = None
     total: int | None = None
     session_id: UUID | None = None
+    predicted_level: str | None = None
+    confidence: float | None = None
 
 
 class QuestionResultOut(APIModel):
@@ -189,6 +193,7 @@ class SessionHistoryOut(APIModel):
     total: int
     correct: int
     accuracy: float
+    is_adaptive: bool = False
 
 
 class ImportOut(APIModel):

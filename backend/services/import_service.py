@@ -247,7 +247,7 @@ async def process_import(db: AsyncSession, rows: list[dict[str, Any]]) -> Import
                     "choice_f": row["choice_f"],
                     "choice_f_image_url": row["choice_f_image_url"],
                     "correct_answer": row["correct_answer"],
-                    "difficulty": None,
+                    "difficulty": row.get("difficulty") or None,
                 }
                 for row in rows
             ]

@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [modules, setModules] = useState<ModuleWithQuizzesOut[]>([]);
   const [history, setHistory] = useState<SessionHistoryOut[]>([]);
   const [loadingQuizId, setLoadingQuizId] = useState<string | null>(null);
+  const [loadingAdaptiveQuizId, setLoadingAdaptiveQuizId] = useState<string | null>(null);
   const [selectedModuleId, setSelectedModuleId] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
 
@@ -37,18 +38,23 @@ export default function DashboardPage() {
     void loadDashboard();
   }, []);
 
-  async function startSession(quizId: string) {
-    setLoadingQuizId(quizId);
+  async function startSession(quizId: string, adaptive = false) {
+    if (adaptive) {
+      setLoadingAdaptiveQuizId(quizId);
+    } else {
+      setLoadingQuizId(quizId);
+    }
     setError(null);
 
     try {
-      const { data } = await api.post<SessionStartOut>("/sessions", { quiz_id: quizId });
+      const { data } = await api.post<SessionStartOut>("/sessions", { quiz_id: quizId, adaptive });
       sessionStorage.setItem("session_start", JSON.stringify(data));
       router.push(`/quiz/${data.session_id}`);
     } catch {
       setError("Could not start the quiz session.");
     } finally {
       setLoadingQuizId(null);
+      setLoadingAdaptiveQuizId(null);
     }
   }
 
@@ -116,6 +122,7 @@ export default function DashboardPage() {
                   key={quiz.id}
                   quiz={quiz}
                   loading={loadingQuizId === quiz.id}
+                  loadingAdaptive={loadingAdaptiveQuizId === quiz.id}
                   onStart={startSession}
                 />
               ))}
