@@ -1,5 +1,0 @@
-{
-  "selected_model": "LogisticRegression",
-  "cv_mean": 0.8606801093643199,
-  "test_acc_k20": 0.90625
-}

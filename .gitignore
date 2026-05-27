@@ -21,3 +21,8 @@ frontend/*.log
 # OS / editor noise
 .DS_Store
 Thumbs.db
+FINAL_SUBMISSION/data_archive/
+FINAL_SUBMISSION/temp_*.txt
+EdNet-Contents/
+EdNet-KT1/
+EdNet-KT2/
