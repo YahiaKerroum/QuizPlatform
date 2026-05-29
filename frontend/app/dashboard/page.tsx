@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { StudentLogoutButton } from "@/components/auth/StudentLogoutButton";
 import { QuizCard } from "@/components/dashboard/QuizCard";
 import { SessionHistory } from "@/components/dashboard/SessionHistory";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -17,6 +18,7 @@ export default function DashboardPage() {
   const [modules, setModules] = useState<ModuleWithQuizzesOut[]>([]);
   const [history, setHistory] = useState<SessionHistoryOut[]>([]);
   const [loadingQuizId, setLoadingQuizId] = useState<string | null>(null);
+  const [loadingAdaptiveQuizId, setLoadingAdaptiveQuizId] = useState<string | null>(null);
   const [selectedModuleId, setSelectedModuleId] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
 
@@ -37,18 +39,23 @@ export default function DashboardPage() {
     void loadDashboard();
   }, []);
 
-  async function startSession(quizId: string) {
-    setLoadingQuizId(quizId);
+  async function startSession(quizId: string, adaptive = false) {
+    if (adaptive) {
+      setLoadingAdaptiveQuizId(quizId);
+    } else {
+      setLoadingQuizId(quizId);
+    }
     setError(null);
 
     try {
-      const { data } = await api.post<SessionStartOut>("/sessions", { quiz_id: quizId });
+      const { data } = await api.post<SessionStartOut>("/sessions", { quiz_id: quizId, adaptive });
       sessionStorage.setItem("session_start", JSON.stringify(data));
       router.push(`/quiz/${data.session_id}`);
     } catch (error) {
       setError(summarizeApiError(error, "Could not start the quiz session."));
     } finally {
       setLoadingQuizId(null);
+      setLoadingAdaptiveQuizId(null);
     }
   }
 
@@ -69,14 +76,14 @@ export default function DashboardPage() {
             Browse by module, then drop into the exact quiz you want without losing momentum.
           </p>
         </div>
-        <Card className="min-w-[15rem] space-y-4">
-          <div className="space-y-2">
+        <div className="flex flex-col items-start gap-4 md:items-end">
+          <StudentLogoutButton />
+          <Card className="min-w-[15rem] space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-clay">Library snapshot</p>
             <p className="font-heading text-4xl text-ink">{totalQuizCount}</p>
             <p className="text-sm text-ink/68">quizzes across {modules.length} module groups</p>
-          </div>
-          <LogoutButton className="w-full" />
-        </Card>
+          </Card>
+        </div>
       </section>
       {error ? <Toast message={error} tone="error" /> : null}
       {modules.length > 0 ? (
@@ -116,6 +123,7 @@ export default function DashboardPage() {
                   key={quiz.id}
                   quiz={quiz}
                   loading={loadingQuizId === quiz.id}
+                  loadingAdaptive={loadingAdaptiveQuizId === quiz.id}
                   onStart={startSession}
                 />
               ))}

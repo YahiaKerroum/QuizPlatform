@@ -94,6 +94,7 @@ Edit `backend/.env` so it points to your local database. Example:
 ```env
 DATABASE_URL=postgresql+asyncpg://postgres:123456789@127.0.0.1:5432/quiz_platform_local
 SECRET_KEY=replace-this-with-a-long-random-secret
+ADMIN_ALLOWED_EMAILS=admin1@example.com,admin2@example.com
 ```
 
 Start the API:
@@ -132,6 +133,12 @@ npm run dev
 The app will be available at:
 
 - `http://127.0.0.1:3000`
+
+Admin access now uses an email allowlist from the backend environment:
+
+- Log in through the normal student login page
+- The backend checks whether the logged-in email appears in `ADMIN_ALLOWED_EMAILS`
+- Only those emails can use the admin portal or call `/admin/*`
 
 ## 5. Import Sample Quiz Data
 
@@ -269,7 +276,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## Current Development Notes
 
-- Admin routes are currently open for local/demo use.
+- Admin routes are protected by an env-backed allowed-email list.
 - The quickest verified local workflow is PostgreSQL + `backend/schema.sql` + sample CSV import.
 - Modules and quiz assignment are managed from `/admin/catalog`.
 - The project includes the larger `sanfoundry_all_quiz.csv`, but `sanfoundry_sample_10_quizzes.csv` is the recommended first import after cloning.

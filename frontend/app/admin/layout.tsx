@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
-import { LogoutButton } from "@/components/auth/LogoutButton";
-import { Toast } from "@/components/ui/Toast";
+import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
 import api from "@/lib/api";
-import type { AuthMeOut } from "@/lib/types";
+import type { AdminAccessOut } from "@/lib/types";
 
 const links = [
   { href: "/admin/catalog", label: "Catalog" },
@@ -20,48 +19,48 @@ const links = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [checkingAccess, setCheckingAccess] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function checkAccess() {
+    let active = true;
+
+    async function verifyAdminAccess() {
       try {
-        const { data } = await api.get<AuthMeOut>("/auth/me");
-        if (!data.is_admin) {
-          router.replace("/dashboard");
-          return;
+        await api.get<AdminAccessOut>("/auth/admin/status");
+        if (active) {
+          setCheckingAccess(false);
         }
       } catch {
-        setError("Could not verify admin access.");
-      } finally {
-        setCheckingAccess(false);
+        if (!active) return;
+        router.replace("/dashboard");
       }
     }
 
-    void checkAccess();
+    void verifyAdminAccess();
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   if (checkingAccess) {
     return (
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <p className="text-sm text-ink/70">Checking admin access...</p>
-      </main>
-    );
-  }
-
-  if (error) {
-    return (
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <Toast message={error} tone="error" />
+        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Admin</p>
+        <p className="mt-4 text-sm text-ink/70">Checking admin access...</p>
       </main>
     );
   }
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-8 space-y-4">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Admin</p>
-        <h1 className="font-heading text-5xl text-ink">Manage modules, quizzes, imports, synthetic data, and exports.</h1>
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-4">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Admin</p>
+          <h1 className="font-heading text-5xl text-ink">Manage modules, quizzes, imports, synthetic data, and exports.</h1>
+        </div>
+        <AdminLogoutButton />
       </div>
       <nav className="mb-8 flex flex-wrap gap-3">
         {links.map((link) => (

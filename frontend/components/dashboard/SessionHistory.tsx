@@ -23,7 +23,14 @@ export function SessionHistory({ sessions }: { sessions: SessionHistoryOut[] }) 
             <tbody>
               {sessions.map((session) => (
                 <tr key={session.session_id} className="border-t border-ink/10 transition duration-300 hover:bg-white/55">
-                  <td className="px-6 py-4">{session.display_name}</td>
+                  <td className="px-6 py-4">
+                    <span>{session.display_name}</span>
+                    {session.is_adaptive && (
+                      <span className="ml-2 inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                        Adaptive
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4">{session.correct} / {session.total}</td>
                   <td className="px-6 py-4">{Math.round(session.accuracy * 100)}%</td>
                   <td className="px-6 py-4">{new Date(session.started_at).toLocaleString()}</td>

@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from postgrest import AsyncPostgrestClient
 
-from ..auth import ensure_profile_for_user, get_current_user_info
+from ..auth import create_access_token, get_current_student, hash_password, require_admin, verify_password
 from ..database import get_db
-from ..schemas import AuthMeOut, LoginIn, RegisterIn, TokenOut
-from ..supabase_auth import get_user_from_token, sign_in_with_password, sign_up_with_password
+from ..models import Student
+from ..schemas import AdminAccessOut, LoginIn, RegisterIn, TokenOut
 
 router = APIRouter()
 
@@ -125,6 +125,6 @@ async def login_student(payload: LoginIn, db: AsyncPostgrestClient = Depends(get
     )
 
 
-@router.get("/me", response_model=AuthMeOut)
-async def get_auth_me(user_info: dict = Depends(get_current_user_info)) -> AuthMeOut:
-    return AuthMeOut.model_validate(user_info)
+@router.get("/admin/status", response_model=AdminAccessOut)
+async def admin_status(student: Student = Depends(require_admin)) -> AdminAccessOut:
+    return AdminAccessOut(allowed=True, email=student.email)

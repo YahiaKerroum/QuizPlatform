@@ -1,0 +1,88 @@
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ── Adaptive Quiz Platform — unified color palette ──────────────────────────
+PALETTE = ['#4F46E5', '#10B981', '#F59E0B', '#F43F5E', '#7C3AED', '#64748B']
+#           indigo     emerald    amber      rose       violet     slate
+
+# Consistent colors for adaptive strategy plots (used throughout §5)
+STRATEGY_COLORS = {
+    'random':      '#64748B',   # slate   — baseline
+    'uncertainty': '#4F46E5',   # indigo  — efficient
+    'entropy':     '#7C3AED',   # violet  — principled
+    'qbc':         '#10B981',   # emerald — best 
+}
+
+# Difficulty level colors (used in heatmaps, bar charts)
+DIFF_COLORS = {
+    'easy':   '#10B981',   # emerald
+    'medium': '#F59E0B',   # amber
+    'hard':   '#F43F5E',   # rose
+}
+
+# Level colors for confusion matrices and class plots
+LEVEL_COLORS = {
+    'beginner':     '#F43F5E',   # rose
+    'intermediate': '#F59E0B',   # amber
+    'advanced':     '#10B981',   # emerald
+}
+
+# ── Apply rcParams globally ──────────────────────────────────────────────────
+plt.rcParams.update({
+    # Backgrounds
+    'figure.facecolor':  '#0F172A',
+    'figure.edgecolor':  '#0F172A',
+    'axes.facecolor':    '#1E293B',
+    'axes.edgecolor':    '#334155',
+    # Labels & titles
+    'axes.labelcolor':   '#E2E8F0',
+    'axes.titlecolor':   '#F8FAFC',
+    'axes.titlesize':    13,
+    'axes.titleweight':  'bold',
+    'axes.labelsize':    11,
+    # Grid
+    'axes.grid':         True,
+    'grid.color':        '#334155',
+    'grid.linewidth':    0.7,
+    'grid.alpha':        0.6,
+    # Color cycle
+    'axes.prop_cycle':   mpl.cycler(color=PALETTE),
+    # Text & font
+    'text.color':        '#E2E8F0',
+    'font.family':       'sans-serif',
+    'font.size':         11,
+    # Ticks
+    'xtick.color':       '#94A3B8',
+    'ytick.color':       '#94A3B8',
+    'xtick.labelsize':   10,
+    'ytick.labelsize':   10,
+    'xtick.direction':   'out',
+    'ytick.direction':   'out',
+    # Lines & markers
+    'lines.linewidth':   2.2,
+    'lines.markersize':  7,
+    'patch.edgecolor':   '#1E293B',
+    'patch.linewidth':   0.8,
+    # Legend
+    'legend.facecolor':  '#1E293B',
+    'legend.edgecolor':  '#334155',
+    'legend.labelcolor': '#E2E8F0',
+    'legend.fontsize':   10,
+    'legend.framealpha': 0.9,
+    # Save
+    'savefig.facecolor': '#0F172A',
+    'savefig.edgecolor': '#0F172A',
+    'savefig.dpi':       150,
+})
+
+# Seaborn — keep consistent with rcParams
+sns.set_theme(style="darkgrid", rc={
+    "axes.facecolor":  "#1E293B",
+    "grid.color":      "#334155",
+    "figure.facecolor":"#0F172A",
+})
+
+print(" Plot color scheme applied")
+print("   PALETTE    :", PALETTE)
+print("   STRATEGIES :", STRATEGY_COLORS)

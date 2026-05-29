@@ -7,6 +7,7 @@ import type { AnswerOut, QuestionOut, SessionStartOut } from "@/lib/types";
 
 interface QuizState {
   sessionId: string;
+  isAdaptive: boolean;
   currentQuestion: QuestionOut;
   questionNumber: number;
   total: number;
@@ -14,11 +15,14 @@ interface QuizState {
   submitting: boolean;
   done: boolean;
   error: string | null;
+  predictedLevel: "beginner" | "intermediate" | "advanced" | null;
+  confidence: number | null;
 }
 
 export function useQuiz(initialData: SessionStartOut) {
   const [state, setState] = useState<QuizState>({
     sessionId: initialData.session_id,
+    isAdaptive: initialData.is_adaptive,
     currentQuestion: initialData.question,
     questionNumber: initialData.question_number,
     total: initialData.total,
@@ -26,6 +30,8 @@ export function useQuiz(initialData: SessionStartOut) {
     submitting: false,
     done: false,
     error: null,
+    predictedLevel: null,
+    confidence: null,
   });
   const [questionRenderTime, setQuestionRenderTime] = useState(Date.now());
 
@@ -56,6 +62,8 @@ export function useQuiz(initialData: SessionStartOut) {
           done: true,
           selected: null,
           submitting: false,
+          predictedLevel: data.predicted_level ?? current.predictedLevel,
+          confidence: data.confidence ?? current.confidence,
         }));
         return;
       }
@@ -71,6 +79,8 @@ export function useQuiz(initialData: SessionStartOut) {
         total: data.total!,
         selected: null,
         submitting: false,
+        predictedLevel: data.predicted_level ?? current.predictedLevel,
+        confidence: data.confidence ?? current.confidence,
       }));
       setQuestionRenderTime(Date.now());
     } catch (error) {

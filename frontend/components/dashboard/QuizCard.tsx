@@ -6,10 +6,12 @@ export function QuizCard({
   quiz,
   onStart,
   loading,
+  loadingAdaptive,
 }: {
   quiz: QuizSummaryOut;
-  onStart: (quizId: string) => void;
+  onStart: (quizId: string, adaptive?: boolean) => void;
   loading: boolean;
+  loadingAdaptive?: boolean;
 }) {
   return (
     <Card className="group relative flex h-full flex-col justify-between gap-6 overflow-hidden border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(252,247,241,0.92))]">
@@ -36,9 +38,25 @@ export function QuizCard({
             : `${quiz.question_count} questions waiting for your next run.`}
         </p>
       </div>
-      <Button className="relative z-[1] w-full sm:w-auto" variant="secondary" disabled={loading} onClick={() => onStart(quiz.id)}>
-        {loading ? "Starting..." : "Start quiz"}
-      </Button>
+      <div className="relative z-[1] flex flex-col gap-2 sm:flex-row">
+        <Button
+          className="flex-1 sm:flex-none"
+          variant="secondary"
+          disabled={loading || loadingAdaptive}
+          onClick={() => onStart(quiz.id, false)}
+        >
+          {loading ? "Starting..." : "Start quiz"}
+        </Button>
+        <Button
+          className="flex-1 sm:flex-none"
+          variant="ghost"
+          disabled={loading || loadingAdaptive}
+          onClick={() => onStart(quiz.id, true)}
+          title="Questions are chosen by the ML model based on your answers"
+        >
+          {loadingAdaptive ? "Starting..." : "Adaptive quiz"}
+        </Button>
+      </div>
     </Card>
   );
 }

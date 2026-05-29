@@ -32,7 +32,19 @@ export default function LoginPage() {
     },
   });
 
-  async function onSubmit(formData: LoginFormData) {
+  function summarizeError(err: unknown) {
+    if (typeof err === "object" && err && "response" in err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      if (typeof detail === "string") {
+        return detail;
+      }
+    }
+    return "Login failed. Check your email and password.";
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
     setError(null);
 
     const parsed = loginSchema.safeParse(formData);
@@ -52,8 +64,10 @@ export default function LoginPage() {
 
       setTokenWithExpiry(authData.session.access_token, authData.session.expires_in ?? 3600);
       router.push("/dashboard");
-    } catch (caughtError) {
-      setError(`Login failed: ${summarizeFormError(caughtError, "Check your email and password.")}`);
+    } catch (err) {
+      setError(summarizeError(err));
+    } finally {
+      setLoading(false);
     }
   }
 

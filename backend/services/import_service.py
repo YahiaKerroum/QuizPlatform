@@ -191,42 +191,64 @@ async def process_import(db: AsyncPostgrestClient, rows: list[dict[str, Any]]) -
             modules_by_id.setdefault(row["module_id"], row["module_name"] or row["module_id"])
 
     if modules_by_id:
-        module_rows = [
-            {
-                "id": module_id,
-                "display_name": module_name or module_id,
-            }
-            for module_id, module_name in modules_by_id.items()
-        ]
-        await db.table("modules").upsert(module_rows, on_conflict="id", ignore_duplicates=True).execute()
+        module_stmt = (
+            insert(Module)
+            .values(
+                [
+                    {
+                        "id": module_id,
+                        "display_name": module_name or module_id,
+                    }
+                    for module_id, module_name in modules_by_id.items()
+                ]
+            )
+            .on_conflict_do_nothing(index_elements=[Module.id])
+        )
+        await db.execute(module_stmt)
 
-    quiz_ids = list(quizzes_by_id.keys())
-    existing_quiz_ids: set[str] = set()
-    if quiz_ids:
-        existing_quizzes_resp = await db.table("quizzes").select("id").in_("id", quiz_ids).execute()
-        existing_quiz_ids = {row["id"] for row in (existing_quizzes_resp.data or [])}
+    quiz_stmt = (
+        insert(Quiz)
+        .values(
+            [
+                {
+                    "id": quiz_id,
+                    "display_name": topic,
+                    "module_id": quiz_modules_by_id.get(quiz_id),
+                }
+                for quiz_id, topic in quizzes_by_id.items()
+            ]
+        )
+        .on_conflict_do_nothing(index_elements=[Quiz.id])
+        .returning(Quiz.id)
+    )
+    quizzes_created = len((await db.execute(quiz_stmt)).scalars().all())
 
-    new_quiz_rows = [
-        {
-            "id": quiz_id,
-            "display_name": topic,
-            "module_id": quiz_modules_by_id.get(quiz_id),
-        }
-        for quiz_id, topic in quizzes_by_id.items()
-        if quiz_id not in existing_quiz_ids
-    ]
-    if new_quiz_rows:
-        await db.table("quizzes").insert(new_quiz_rows).execute()
-    quizzes_created = len(new_quiz_rows)
-
-    quiz_ids_in_rows = list({row["quiz_id"] for row in rows})
-    existing_question_pairs: set[tuple[str, int]] = set()
-    if quiz_ids_in_rows:
-        existing_questions_resp = (
-            await db.table("questions")
-            .select("quiz_id,question_number")
-            .in_("quiz_id", quiz_ids_in_rows)
-            .execute()
+    question_stmt = (
+        insert(Question)
+        .values(
+            [
+                {
+                    "quiz_id": row["quiz_id"],
+                    "question_number": row["question_number"],
+                    "question_text": row["question_text"],
+                    "question_image_url": row["question_image_url"],
+                    "choice_a": row["choice_a"],
+                    "choice_a_image_url": row["choice_a_image_url"],
+                    "choice_b": row["choice_b"],
+                    "choice_b_image_url": row["choice_b_image_url"],
+                    "choice_c": row["choice_c"],
+                    "choice_c_image_url": row["choice_c_image_url"],
+                    "choice_d": row["choice_d"],
+                    "choice_d_image_url": row["choice_d_image_url"],
+                    "choice_e": row["choice_e"],
+                    "choice_e_image_url": row["choice_e_image_url"],
+                    "choice_f": row["choice_f"],
+                    "choice_f_image_url": row["choice_f_image_url"],
+                    "correct_answer": row["correct_answer"],
+                    "difficulty": row.get("difficulty") or None,
+                }
+                for row in rows
+            ]
         )
         existing_question_pairs = {
             (row["quiz_id"], int(row["question_number"]))

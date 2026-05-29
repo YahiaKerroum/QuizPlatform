@@ -41,7 +41,19 @@ export default function RegisterPage() {
   const passwordMinLength = password.length >= 8;
   const passwordMaxLength = password.length <= 128;
 
-  async function onSubmit(formData: RegisterFormData) {
+  function summarizeError(err: unknown) {
+    if (typeof err === "object" && err && "response" in err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+      if (typeof detail === "string") {
+        return detail;
+      }
+    }
+    return "Registration failed. Make sure the email is unique and the password is at least 8 characters.";
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLoading(true);
     setError(null);
     setSuccess(null);
 
@@ -76,8 +88,10 @@ export default function RegisterPage() {
 
       setTokenWithExpiry(signInData.session.access_token, signInData.session.expires_in ?? 3600);
       router.push("/dashboard");
-    } catch (caughtError) {
-      setError(`Registration failed: ${summarizeFormError(caughtError, "Please try again.")}`);
+    } catch (err) {
+      setError(summarizeError(err));
+    } finally {
+      setLoading(false);
     }
   }
 

@@ -1,0 +1,934 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+\usepackage{setspace}
+
+\onehalfspacing
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=blue!70!black,
+  urlcolor=blue!70!black,
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!8},
+}
+
+\setlength{\headheight}{15pt}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Adaptive Quiz ML Pipeline}
+\lhead{Yahia Kerroum -- ENSIA ML Spring 2026}
+\cfoot{\thepage}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
+
+\title{
+  \vspace{-1cm}
+  {\Large\bfseries Adaptive Quiz ML Pipeline} \\[0.5em]
+  {\large An End-to-End Adaptive Assessment System\\
+  Using Active Learning and Gradient Boosting} \\[1em]
+  {\normalsize Machine Learning Course -- ENSIA, Spring 2025--2026}
+}
+\author{Yahia Kerroum}
+\date{May 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+We design, implement, and evaluate an end-to-end adaptive quiz system that classifies
+student knowledge levels (\emph{beginner}, \emph{intermediate}, \emph{advanced}) and
+selects questions dynamically to minimise the number of questions required while
+maximising classification accuracy.
+The pipeline proceeds through nine stages: question bank curation (8,561 questions across
+10 modules), synthetic student generation under a realistic $\mathcal{N}(0.55,\,0.18)$
+population model, 25-feature engineering, multi-module Logistic Regression training
+(85.7\% grouped CV), adaptive strategy comparison (QBC achieves a 40\% question
+reduction), and four real-data validation experiments.
+A purpose-built single-module model is then developed iteratively: starting from a
+Logistic Regression baseline (\(\approx\)71\% CV), we upgrade to
+\textbf{HistGradientBoosting} with 21 discriminative features (v3: 81.2\% CV) and
+finally incorporate population-realistic class proportions and support for 8-question
+sessions (v4: 77.0\% CV -- a more honest metric on a real student distribution).
+The deployed backend integrates length-conditional confidence thresholds that allow
+early stopping as soon as question 8 for high-confidence students.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Presentation Roadmap}
+\label{sec:roadmap}
+% ============================================================================
+
+This report is structured to mirror the 15-minute presentation format required for
+the final evaluation. Each major section below maps to one of the five presentation
+pillars:
+
+\begin{table}[H]
+\centering
+\caption{Report sections and presentation mapping}
+\begin{tabular}{@{}p{4.5cm}p{4.5cm}p{5cm}@{}}
+\toprule
+Presentation point & Report section & Key claim \\
+\midrule
+Problem Statement / Context &
+\S\ref{sec:intro} &
+Classify student knowledge level using only answer sequences; minimise questions needed. \\[4pt]
+Data Description \& Preprocessing &
+\S\ref{sec:data}, \S\ref{sec:population} &
+8,561 MCQs from Sanfoundry; hybrid difficulty labelling; synthetic $\mathcal{N}(0.55,0.18)$ population. \\[4pt]
+Solution Design &
+\S\ref{sec:features}, \S\ref{sec:multimodule}, \S\ref{sec:singlemodule} &
+25/21-feature vectors; HistGBM with variance features; population-realistic training. \\[4pt]
+Experimentation \& Results Comparison &
+\S\ref{sec:adaptive}, \S\ref{sec:realdata}, \S\ref{sec:singlemodule} &
+QBC 40\% reduction; 77\%--96\% CV across datasets; model evolution LogReg $\to$ HistGBM. \\[4pt]
+Conclusion &
+\S\ref{sec:conclusion}, \S\ref{sec:discoveries} &
+Working deployed platform; identified structural limits of single-module classification. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Introduction}
+\label{sec:intro}
+% ============================================================================
+
+Adaptive testing, or Computer-Adaptive Testing (CAT), adjusts the difficulty and
+selection of questions in real time based on a student's emerging performance profile.
+Unlike fixed-form quizzes where every student answers the same questions in the same
+order, adaptive systems can reach the same classification confidence with significantly
+fewer questions -- reducing assessment fatigue and improving the signal-to-noise ratio
+for borderline students.
+
+This project builds a fully functional adaptive quiz platform, integrating a machine
+learning classification backend with a Next.js frontend and a FastAPI/PostgreSQL
+backend. The ML component is responsible for three tasks:
+\begin{enumerate}[noitemsep]
+  \item \textbf{Level prediction}: classify a student as beginner, intermediate, or
+        advanced given their answer history.
+  \item \textbf{Question selection}: given remaining candidates, choose the question
+        whose difficulty tier best targets the current uncertainty.
+  \item \textbf{Stop criterion}: decide when enough evidence has accumulated to commit
+        to a classification, terminating the session early.
+\end{enumerate}
+
+The report is structured as follows.
+Section~\ref{sec:data} describes the question bank and difficulty labelling.
+Section~\ref{sec:population} covers synthetic student generation.
+Section~\ref{sec:features} details the feature engineering pipeline.
+Section~\ref{sec:multimodule} presents the multi-module model.
+Section~\ref{sec:adaptive} evaluates adaptive strategies.
+Section~\ref{sec:realdata} summarises real-data validation.
+Section~\ref{sec:singlemodule} traces the evolution of the single-module model.
+Section~\ref{sec:thresholds} derives the adaptive confidence thresholds.
+Section~\ref{sec:platform} describes the platform integration.
+Section~\ref{sec:limitations} discusses limitations and Section~\ref{sec:conclusion}
+concludes.
+
+% ============================================================================
+\section{Dataset and Question Bank Curation}
+\label{sec:data}
+% ============================================================================
+
+\subsection{Raw data source}
+
+The question bank is scraped from Sanfoundry (\url{https://www.sanfoundry.com}), a
+large repository of multiple-choice questions for engineering topics.
+The raw bank contains \textbf{8,561 questions} spanning 10 computer science modules:
+Computer Fundamentals, C++ Programming, Cyber Security, Data Structures,
+Operating Systems, Software Engineering, and four additional subjects.
+
+\subsection{Three-stage filtering}
+
+Questions pass three consecutive filters before entering the adaptive pipeline:
+
+\begin{table}[H]
+\centering
+\caption{Question bank filtering pipeline}
+\begin{tabular}{@{}llrr@{}}
+\toprule
+Stage & Filter & Removed & Remaining \\
+\midrule
+1 & Module selection (6 core subjects) & 2,200 & 6,361 \\
+2 & Quality flags (duplicate, malformed) & 1,006 & 5,355 \\
+3 & Semantic deduplication (cosine > 0.85) & 997  & \textbf{4,358} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Semantic deduplication uses TF-IDF embeddings with cosine similarity; any question
+pair with similarity above 0.85 has the shorter question removed, retaining the more
+complete formulation.
+
+\subsection{Difficulty labelling}
+
+Difficulty labels are assigned with a hybrid strategy:
+\begin{enumerate}[noitemsep]
+  \item \textbf{Gemini-assisted labelling} (primary): a structured prompt asks the
+        model to classify each question as easy/medium/hard with a confidence score.
+        Questions with confidence $\geq 0.80$ receive their label directly.
+  \item \textbf{Manual ground-truth} (secondary): 150 questions per module are
+        hand-labelled by the project author; these serve as the reference set.
+  \item \textbf{Rubric scoring} (fallback): questions failing both above criteria
+        receive a rule-based score based on question length, number of distractors,
+        and lexical complexity.
+\end{enumerate}
+
+The final distribution across the 6 retained modules is approximately
+35\% easy, 42\% medium, 23\% hard -- closely matching the synthetic session
+difficulty distribution used during training.
+
+% ============================================================================
+\section{Synthetic Student Population}
+\label{sec:population}
+% ============================================================================
+
+\subsection{Population model}
+
+Real student data is unavailable at training time; the model is therefore trained
+entirely on \emph{synthetic} sessions. The population model is parameterised by a
+Normal distribution $\mathcal{N}(\mu,\sigma)$ over overall accuracy:
+
+\[
+  \text{overall\_acc} \sim \mathcal{N}(0.55,\;0.18)
+\]
+
+This places the average student at 55\% accuracy with a standard deviation of 18
+percentage points. Integrating under the Normal curve with class boundaries at
+$\text{acc} = 0.45$ (beginner/intermediate) and $\text{acc} = 0.70$
+(intermediate/advanced) yields the following \textbf{realistic class proportions}:
+
+\begin{table}[H]
+\centering
+\caption{Class proportions from $\mathcal{N}(0.55,\,0.18)$}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Class & Accuracy range & Population fraction \\
+\midrule
+Beginner     & $< 0.45$          & $\approx 29\%$ \\
+Intermediate & $[0.45,\;0.70)$   & $\approx 51\%$ \\
+Advanced     & $\geq 0.70$       & $\approx 20\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Per-level generative model}
+
+Each student's session is generated from a \emph{per-difficulty accuracy profile}
+sampled around level-specific centres:
+
+\begin{table}[H]
+\centering
+\caption{Level centres (accuracy by difficulty)}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Level & Easy & Medium & Hard \\
+\midrule
+Advanced     & 0.94 & 0.82 & 0.68 \\
+Intermediate & 0.74 & 0.54 & 0.30 \\
+Beginner     & 0.50 & 0.27 & 0.13 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A per-session profile is sampled: $p_d \sim \mathcal{N}(\mu_d, 0.055)$, clipped to
+$[0.04, 0.98]$, with the monotonicity constraint $p_\text{easy} \geq p_\text{medium}
+\geq p_\text{hard}$ enforced. Response times follow independent Normal distributions
+per level and difficulty, calibrated so that beginners guess quickly on hard questions
+while advanced students slow down on them.
+
+Boundary students (15\% of each level) have their accuracy centres shifted toward
+the adjacent class to simulate realistic overlap in the classifier's decision regions.
+
+% ============================================================================
+\section{Feature Engineering}
+\label{sec:features}
+% ============================================================================
+
+Each student session is converted into a fixed-length feature vector.
+The multi-module model uses 25 features; the final single-module model uses 21.
+All indices 0--14 are identical across both models, ensuring backward compatibility
+in the backend service.
+
+\subsection{Feature groups}
+
+\begin{table}[H]
+\centering
+\caption{21-feature vector for the single-module model}
+\begin{tabular}{@{}clp{7cm}@{}}
+\toprule
+Index & Feature & Description \\
+\midrule
+0     & \texttt{overall\_acc}       & Fraction of correct answers \\
+1--3  & \texttt{acc\_easy/med/hard} & Per-difficulty accuracy \\
+4--6  & \texttt{has\_easy/med/hard} & Binary: difficulty tier seen \\
+7     & \texttt{last3\_acc}         & Accuracy on last 3 questions (recency) \\
+8     & \texttt{error\_streak}      & Current consecutive error count \\
+9     & \texttt{correct\_streak}    & Current consecutive correct count \\
+10    & \texttt{acc\_trend}         & \texttt{last3\_acc} $-$ \texttt{first3\_acc} \\
+11    & \texttt{fast\_correct\_rate}& Fraction fast \& correct \\
+12    & \texttt{fast\_wrong\_rate}  & Fraction fast \& wrong (guessing signal) \\
+13    & \texttt{slow\_correct\_rate}& Fraction slow \& correct \\
+14    & \texttt{time\_acc\_corr}    & Pearson $r$(speed, correctness), z-scored \\
+15    & \texttt{weighted\_acc}      & $\frac{\sum w_d \cdot n_d \cdot \text{acc}_d}{\sum w_d n_d}$, $w=\{1,2,3\}$ \\
+16    & \texttt{n\_norm}            & Session length / 20 \\
+17    & \texttt{hard\_variance}     & Variance of correctness on hard questions \\
+18    & \texttt{medium\_variance}   & Variance of correctness on medium questions \\
+19    & \texttt{medium\_hard\_gap}  & $\text{acc\_medium} - \text{acc\_hard}$ \\
+20    & \texttt{module\_id\_enc}    & Module identity, categorical (0--5) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Self-normalised time features}
+
+Time-accuracy interaction features (indices 11--14) are \emph{self-normalised}: the
+threshold between ``fast'' and ``slow'' is the student's own session mean, not an
+absolute value. This makes features invariant to total quiz duration, device speed,
+and inter-student differences in typing or reading pace.
+
+\subsection{Variance and gap features}
+
+Features 17--19 were the key addition that resolved the intermediate-class recall
+collapse. Intermediate students are characterised by \emph{inconsistent} performance
+on hard questions -- sometimes correct, sometimes wrong -- giving \texttt{hard\_variance}
+values near 0.25 (maximum for a Bernoulli variable). Beginners have uniformly near-zero
+hard accuracy (variance $\approx$ 0) and advanced students are uniformly near-1
+(variance $\approx$ 0). The medium-hard gap similarly discriminates: advanced students
+maintain a small gap ($\approx 0.14$), while intermediates show a large gap ($\approx
+0.24$) and beginners show a very small gap ($\approx 0.14$ from low base rates).
+
+% ============================================================================
+\section{Multi-Module Model}
+\label{sec:multimodule}
+% ============================================================================
+
+\subsection{Architecture}
+
+The multi-module model classifies sessions in which the student answers 30 questions
+spanning all 6 modules. Four classifiers are compared using 5-fold
+\texttt{StratifiedGroupKFold} (grouped by student to prevent data leakage):
+
+\begin{table}[H]
+\centering
+\caption{Classifier comparison on 25-feature multi-module data}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Classifier & Grouped 5-fold CV & Notes \\
+\midrule
+Gaussian Naive Bayes   & 74.2\% & Fast but assumes feature independence \\
+Decision Tree (depth 6)& 79.1\% & Interpretable; prone to overfitting \\
+Random Forest          & 83.4\% & Ensemble, slow at inference \\
+\textbf{Logistic Regression} & \textbf{85.7\%} & Best balance of accuracy and speed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Logistic Regression is selected for the multi-module setting: it achieves the highest
+CV accuracy and provides well-calibrated probability outputs necessary for the
+confidence-based stop criterion.
+
+\subsection{Feature ablation}
+
+Removing the two time features (\texttt{avg\_time}, \texttt{time\_trend}) reduces CV
+accuracy from 85.7\% to 83.1\% ($\Delta = -2.6$ pp), confirming that response-time
+information carries independent predictive signal beyond raw accuracy.
+
+\subsection{Calibration}
+
+Reliability diagrams show that the raw Logistic Regression is slightly overconfident
+in the 60--80\% range. Platt scaling (sigmoid calibration via cross-validated
+\texttt{CalibratedClassifierCV}) corrects this, producing predicted probabilities
+that track empirical frequencies within $\pm 3\%$ across all bins.
+
+% ============================================================================
+\section{Adaptive Strategies}
+\label{sec:adaptive}
+% ============================================================================
+
+Four adaptive question-selection strategies are evaluated in simulation:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Random}: uniform random selection from remaining questions.
+  \item \textbf{Uncertainty sampling}: select the question whose difficulty tier
+        maximises classifier uncertainty (smallest max-probability class).
+  \item \textbf{Entropy}: select the question that would maximally increase
+        predictive entropy if answered correctly vs incorrectly.
+  \item \textbf{Query-by-Committee (QBC)}: a committee of three classifiers
+        votes; select the question with maximum vote disagreement.
+\end{enumerate}
+
+\subsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Adaptive strategy comparison (500 simulated students)}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Strategy & AUQC & Questions for 70\% accuracy & Final accuracy \\
+\midrule
+Random       & 0.712 & 10 & 84.1\% \\
+Uncertainty  & 0.718 & 8  & 84.9\% \\
+Entropy      & 0.721 & 8  & 85.2\% \\
+\textbf{QBC} & \textbf{0.730} & \textbf{6} & \textbf{85.7\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+QBC achieves a \textbf{40\% question reduction} (6 questions vs 10 for random) to
+reach 70\% population accuracy. The Area Under the Questions-to-Classification
+curve (AUQC) summarises this efficiency across all thresholds.
+
+\subsection{Statistical significance}
+
+A paired $t$-test comparing QBC and random accuracy-vs-questions trajectories
+yields $p < 0.001$, confirming the improvement is not due to sampling variance.
+Per-module analysis shows the largest gains in Operating Systems and Data Structures
+modules, where questions are more uniformly distributed across difficulties.
+
+% ============================================================================
+\section{Real Data Validation}
+\label{sec:realdata}
+% ============================================================================
+
+The model is validated on four real datasets of increasing domain distance:
+
+\begin{table}[H]
+\centering
+\caption{Cross-curriculum generalisation results}
+\begin{tabular}{@{}lccl@{}}
+\toprule
+Dataset & Students & CV Accuracy & Notes \\
+\midrule
+Data Mining quizzes (ENSIA) & 127 & 89.4\% $\pm$ 4.1\% & Same institution, 5 quizzes \\
+OS/ITE quizzes (AI224)      & 626 & 71.3\% $\pm$ 6.2\% & 92\% class imbalance \\
+Lectu/ENSIA                 & 412 & 96.6\% $\pm$ 3.2\% & Real adaptive sessions \\
+EdNet KT1/KT2               & 5,000 & 93.1\% $\pm$ 1.8\% & Large-scale, different domain \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The OS/ITE result (71.3\%) is lower due to severe class imbalance -- 578 of 626 students
+are labelled intermediate, leaving only 48 advanced students for the rare class. The
+high accuracy on Lectu/ENSIA and EdNet confirms that the model's features are
+domain-agnostic: accuracy profiles and time-accuracy interactions transfer well
+to unseen curricula.
+
+\subsection{Online inflation}
+
+Data Mining scores show a systematic 8--12 pp upward bias compared to synthetic
+predictions. This is consistent with online quiz taking: students answer with access
+to course notes, creating an inflated accuracy signal. The model correctly detects
+these students as intermediate-to-advanced, which is accurate for their
+\emph{assisted} performance even if their unassisted level is lower.
+
+% ============================================================================
+\section{Single-Module Model Evolution}
+\label{sec:singlemodule}
+% ============================================================================
+
+The multi-module model requires 30 questions spanning 6 modules.
+The live platform serves single-subject quizzes (10--20 questions from one module).
+A dedicated single-module model is therefore developed.
+
+\subsection{v1: Logistic Regression baseline}
+
+The first attempt extends the multi-module feature set with 12 module-pair features
+(one accuracy and one binary flag per module). The 26-feature LogReg reaches only
+\textbf{$\approx$71\% CV}, with intermediate class recall collapsing to \textbf{35\%}.
+
+Diagnosis: LogReg cannot learn the non-linear decision boundary between intermediate
+and beginner/advanced. Intermediate students are characterised by \emph{inconsistency}
+on hard questions -- a variance-based pattern invisible to a linear model.
+
+\subsection{v2: Calibrated LogReg with grid search}
+
+GridSearchCV over regularisation strength ($C \in \{0.5, 1, 2, 5, 10\}$) and solver
+finds the optimum at $C=5$, \texttt{lbfgs}. Platt calibration is applied.
+CV improves to $\approx$73\%, confirming that 71\% is a ceiling for linear models
+on this feature set, not a tuning deficiency.
+
+\subsection{v3: HistGradientBoosting, 21 features}
+\label{sec:v3}
+
+Three structural changes break through the linear ceiling:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Feature reduction}: 12 module-pair features replaced by a single
+        categorical \texttt{module\_id\_enc} (integer 0--5). HistGBM creates
+        dedicated split bins for categorical features, recovering the module signal
+        without the 12-feature redundancy.
+  \item \textbf{Variance features}: \texttt{hard\_variance}, \texttt{medium\_variance},
+        \texttt{medium\_hard\_gap} added (features 17--19). These are the primary
+        discriminators for the intermediate class.
+  \item \textbf{Classifier}: \texttt{HistGradientBoostingClassifier} with
+        \texttt{categorical\_features=[20]}, trained on 12--20 question sessions
+        (1500 per level/module, 15\% boundary students).
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\caption{HistGBM v3 hyperparameters}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Parameter & Value \\
+\midrule
+\texttt{max\_iter}          & 800 \\
+\texttt{max\_depth}         & 7 \\
+\texttt{learning\_rate}     & 0.03 \\
+\texttt{min\_samples\_leaf} & 20 \\
+\texttt{l2\_regularization} & 0.4 \\
+\texttt{class\_weight}      & balanced \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Result: 81.2\% CV $\pm$ 0.2\%}, intermediate recall rises from 35\% to
+\textbf{86\%}. The low fold variance ($\pm$0.2\%) confirms structural improvement.
+
+\subsection{v4: Realistic distribution, 8-question sessions}
+\label{sec:v4}
+
+Two problems remain after v3:
+\begin{enumerate}[noitemsep]
+  \item Sessions 12--20 questions forces \texttt{MIN\_QUESTIONS=12}. Most platform
+        quizzes contain $\leq$15 questions, so adaptive stopping rarely activates
+        before question 12.
+  \item Equal class sampling (1500/level) is unrealistic and inflates the CV metric.
+        The $\mathcal{N}(0.55, 0.18)$ population model predicts 51\% intermediate --
+        the hardest class to classify.
+\end{enumerate}
+
+\textbf{Changes in v4:}
+\begin{itemize}[noitemsep]
+  \item Sessions 8--20 questions (40\% short 8--11, 60\% long 12--20).
+  \item Class proportions: beginner 29\%, intermediate 51\%, advanced 20\%.
+  \item Increased regularisation (\texttt{l2\_regularization}: 0.4 $\to$ 0.6;
+        \texttt{min\_samples\_leaf}: 20 $\to$ 30) to handle noisier short sessions.
+  \item More iterations (800 $\to$ 1000), shallower depth (7 $\to$ 6).
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{v4 accuracy by session length}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Session length & Accuracy & Sessions \\
+\midrule
+n = 8--11  & 76.4\% & 10,794 \\
+n = 12--15 & 78.8\% & 7,049 \\
+n = 16--20 & 82.7\% & 9,151 \\
+\midrule
+\textbf{Overall CV} & \textbf{77.0\% $\pm$ 0.6\%} & 26,994 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The 4.2 pp drop from v3 (81.2\% $\to$ 77.0\%) is expected and desirable: the CV is
+now measured on the same imbalanced distribution as the real student population.
+The 81.2\% was inflated by equal-class sampling; 77.0\% is the correct estimate of
+real-world classification performance.
+
+% ============================================================================
+\section{Adaptive Confidence Thresholds}
+\label{sec:thresholds}
+% ============================================================================
+
+\subsection{Motivation}
+
+A flat confidence threshold (e.g., 80\%) treats a session of 8 questions the same as
+one of 18. This is inappropriate: at $n=8$, each observation carries high binomial
+variance. A student who correctly answers 6 of 8 hard questions could be advanced or
+could have been lucky. A flat threshold would incorrectly terminate such sessions.
+
+\subsection{Length-conditional design}
+
+The threshold $\tau(n)$ is defined as:
+
+\[
+\tau(n) = \begin{cases}
+  \infty    & n < 8  \quad\text{(never stop)} \\
+  0.93      & 8 \leq n \leq 9 \\
+  0.88      & 10 \leq n \leq 11 \\
+  0.83      & 12 \leq n \leq 14 \\
+  0.80      & n \geq 15
+\end{cases}
+\]
+
+The thresholds are chosen to require near-certainty for early stops: a 93\%
+confidence at $n=8$ corresponds to eliminating all but the most extreme student
+profiles from early termination. The model's 88\% confidence on the canonical
+advanced 8-question sanity check falls below 93\%, meaning that session correctly
+continues to accumulate more evidence.
+
+\subsection{Practical effect}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Clear beginners and advanced students} (flat low/high profiles)
+        reach 93\%+ confidence by question 8--9 and stop early.
+  \item \textbf{Intermediate and boundary students} rarely exceed 83\% at $n<12$,
+        so they always answer at least 12 questions -- matching the regime where
+        the model was most carefully validated.
+  \item \textbf{Maximum length}: 20 questions; guaranteed termination.
+\end{itemize}
+
+% ============================================================================
+\section{Platform Integration}
+\label{sec:platform}
+% ============================================================================
+
+\subsection{Architecture}
+
+The adaptive quiz platform is a full-stack web application:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Backend}: FastAPI (Python), async SQLAlchemy, PostgreSQL via asyncpg.
+  \item \textbf{Frontend}: Next.js 14 (App Router), TypeScript, Tailwind CSS.
+  \item \textbf{Auth}: Supabase JWT with email allowlist for admin access.
+\end{itemize}
+
+\subsection{ML service API}
+
+The backend exposes four public functions in \texttt{backend/services/ml\_service.py}:
+
+\begin{lstlisting}[language=Python]
+compute_features(is_correct_list, difficulty_list,
+                 time_ms_list, module_list) -> np.ndarray  # (1, 21)
+
+predict_level(features) -> dict  # {level, confidence, probabilities}
+
+select_next_question(features, candidate_numbers,
+                     candidate_difficulties) -> int  # question number
+
+should_stop(features, n_answered) -> bool
+\end{lstlisting}
+
+\texttt{should\_stop} integrates the length-conditional threshold:
+\begin{lstlisting}[language=Python]
+def should_stop(features, n_answered):
+    if n_answered < MIN_QUESTIONS:  # MIN_QUESTIONS = 8
+        return False
+    if n_answered >= MAX_QUESTIONS:  # MAX_QUESTIONS = 20
+        return True
+    ...
+    return prediction["confidence"] >= _confidence_threshold(n_answered)
+\end{lstlisting}
+
+\subsection{Model loading}
+
+The model is loaded lazily on first call and cached globally. The bundle format is:
+\begin{lstlisting}[language=Python]
+bundle = {
+    "model": HistGradientBoostingClassifier,
+    "approach": "single_module_histgbm_v4",
+    "n_features": 21,
+    "feature_names": [...],
+    "cv_accuracy": 0.770,
+}
+\end{lstlisting}
+
+If the model file is missing, \texttt{predict\_level} falls back to a rule-based
+heuristic using \texttt{acc\_hard} and \texttt{acc\_medium} thresholds, ensuring
+the platform degrades gracefully.
+
+\subsection{Session flow}
+
+\begin{enumerate}[noitemsep]
+  \item Student selects a quiz module and starts a session.
+  \item The backend calls \texttt{select\_next\_question} with all remaining questions.
+  \item After each answer, \texttt{compute\_features} is updated and \texttt{should\_stop}
+        is evaluated.
+  \item On termination, \texttt{predict\_level} returns the final classification;
+        the session record is stored with level, confidence, and probabilities.
+  \item The frontend displays a results page with the assigned level and score.
+\end{enumerate}
+
+% ============================================================================
+\section{What We Discovered Along the Way}
+\label{sec:discoveries}
+% ============================================================================
+
+This section documents non-obvious insights -- things that only became clear after
+building and breaking the system. They are not visible from the final results alone.
+
+\subsection{Why multi-module classification is easier than single-module}
+
+The intuition is simple once stated: \emph{a strong student is strong in general}.
+A student who scores 85\%+ on Operating Systems questions almost certainly also
+performs well on Data Structures and Software Engineering. The multi-module feature
+vector captures this by observing accuracy across six different knowledge domains in
+a single session. The redundancy works in the classifier's favour: even if a student
+has a bad run on one module, the signal from the other five corrects the estimate.
+
+Single-module classification breaks this redundancy. A student who scores 75\% on
+C++ might be genuinely intermediate, or might be an advanced student who never
+touched C++ before, or a beginner who got lucky on easy questions. Without the
+cross-module signal, there is no way to distinguish these cases from the single module
+alone. This is why the multi-module model achieves 85.7\% CV while the single-module
+model plateaus at 77\%: the problem is structurally harder, not just harder to tune.
+
+The practical implication is that a platform offering cross-module quizzes would
+get more accurate adaptive placement with fewer total questions than one that runs
+strictly module-by-module -- a real system design trade-off.
+
+\subsection{The structural problem with course-specific quiz data}
+
+The OS/ITE dataset (626 students, AI224 course) delivers 71.3\% CV -- the worst
+real-data result. The obvious explanation is data quality; the real explanation
+is more fundamental.
+
+The course delivers the same lectures to every student in a single semester cohort.
+Students who enrol are, almost by construction, at a similar prior knowledge level:
+they passed the prerequisite courses, they are in the same year of study, they are
+preparing for the same exam. The result is that 578 of 626 students (92\%) end up
+labelled intermediate -- not because the labelling is wrong, but because the
+\emph{population is genuinely homogeneous}.
+
+A classifier that sees 92\% of training examples in one class cannot learn to
+distinguish the other two, regardless of how good the features are. This is not a
+solvable data problem. It is a signal problem: the quiz was not designed to
+discriminate among knowledge levels, it was designed to assess a specific curriculum.
+Any adaptive system deployed in a similarly homogeneous context would face the same
+ceiling, and 71\% with balanced class weights is close to the best possible result.
+
+\subsection{The Data Mining quiz grade inflation problem}
+
+The DM quizzes from ENSIA were administered online, via Google Forms, without
+invigilation. Students answered with access to their course slides, textbooks, and
+each other. The quiz scores are therefore \emph{assisted performance scores}, not
+knowledge assessments.
+
+This created a systematic upward shift of 8--12 percentage points compared to what
+the synthetic model expects for each level. The model classifies the same student as
+intermediate in the synthetic distribution but intermediate-to-advanced when given
+their quiz scores -- not because it is wrong, but because it is accurately reflecting
+the inflated input. The model cannot distinguish ``genuinely advanced'' from
+``intermediate with open notes'': the feature vectors are identical.
+
+The deeper issue is that this kind of data contamination is nearly impossible to
+detect automatically. There is no feature in the answer history that reveals whether
+a student consulted external resources. This is a fundamental limitation of any
+online, unsupervised adaptive assessment -- and it is why supervised exam conditions
+remain a hard requirement for high-stakes placement.
+
+\subsection{Why we moved from raw response time to time-accuracy interaction}
+
+The first version of the feature set included \texttt{avg\_time} and
+\texttt{time\_trend} as raw millisecond values. These features have an obvious
+psychometric motivation: students who think longer on hard questions are likely
+more engaged than those who answer immediately. But raw times are confounded by
+everything outside the student's knowledge: their device, their internet connection,
+their reading speed, whether they misclicked, whether they stepped away from the
+screen.
+
+A student answering from a mobile phone over a slow connection will show systematically
+higher times than the same student on a desktop, regardless of knowledge level.
+The raw feature is a mixture of knowledge signal and device noise, and the model
+cannot separate them.
+
+The self-normalised approach resolves this by replacing ``is this response fast?''
+with ``is this response fast \emph{for this student in this session}?'' The threshold
+is the student's own session mean, so all device and connection effects cancel out.
+What remains is the \emph{relative pattern}: did the student slow down on hard
+questions (a sign of genuine engagement), or were their times uniform (suggesting
+guessing)? The features \texttt{fast\_wrong\_rate} and \texttt{time\_acc\_corr}
+capture this directly. The ablation study confirmed the improvement: removing the
+time features drops CV by 2.6 pp.
+
+\subsection{Why Logistic Regression hits a ceiling on intermediate classification}
+
+When the intermediate class recall collapsed to 35\% with LogReg, the natural
+response was to tune the regularisation parameter. GridSearchCV across five values
+of $C$ moved accuracy from 71\% to 73\% -- a 2 pp improvement that exhausted the
+entire tunable range. The ceiling was not a hyperparameter problem.
+
+The root cause is geometric: intermediate students do not occupy a convex region in
+feature space. An intermediate student is not someone who always gets medium accuracy
+on every question type. They are someone whose hard-question performance is
+\emph{unpredictable} -- sometimes correct, sometimes not -- while their easy-question
+accuracy is reliably moderate. This inconsistency cannot be expressed as a linear
+combination of features. It requires capturing variance, not just means.
+
+HistGradientBoosting resolves this naturally because tree splits can express
+``if hard\_variance is in this range AND acc\_medium is in that range, then
+intermediate.'' Logistic Regression has no equivalent mechanism regardless of how
+many features you add or how you regularise.
+
+\subsection{The difficulty labelling gap}
+
+The question bank contains 4,358 questions. Getting reliable difficulty labels for
+all of them without a live student population to observe is genuinely hard. Our
+approach -- Gemini-assisted labelling with manual ground truth for a sample -- works
+well for extreme cases (very easy definition questions vs. very hard multi-step
+reasoning problems) but struggles at the medium/hard boundary.
+
+The practical consequence is that the ``medium'' difficulty bin is over-populated and
+somewhat heterogeneous. Some questions labelled medium would be hard for a beginner and
+easy for an advanced student, which is actually correct behaviour for an adaptive
+system. But some medium questions are simply mislabelled, and the model has no way to
+detect this: it treats them as accurate signals.
+
+This is not a fixable problem without real student response data. The correct long-term
+solution is to use the platform's own answer logs to estimate empirical difficulty
+(fraction of correct responses per question) and retroactively update labels. This
+is standard in industrial IRT (Item Response Theory) systems but requires a minimum
+deployment period to accumulate sufficient data.
+
+% ============================================================================
+\section{Limitations and Honest Assessment}
+\label{sec:limitations}
+% ============================================================================
+
+\begin{table}[H]
+\centering
+\caption{Known limitations}
+\begin{tabular}{@{}p{3.5cm}p{3cm}p{7cm}@{}}
+\toprule
+Limitation & Severity & Impact and mitigation \\
+\midrule
+Synthetic training data only &
+High &
+The model has never observed a real student. The 77\% CV is measured on synthetic data;
+real-world accuracy is unknown. Mitigation: collect labelled sessions as students use
+the platform and retrain periodically. \\[4pt]
+No cross-validation on real single-module sessions &
+High &
+The single-module model is validated via sanity checks, not held-out real data.
+Mitigation: deploy with session logging to enable future validation. \\[4pt]
+EdNet smoke test &
+Medium &
+EdNet contains different question types (knowledge tracing, binary responses only);
+no ground-truth level labels are available. The 93.1\% CV uses proxy labels from
+accuracy terciles, making it an upper-bound estimate. \\[4pt]
+Intermediate class dominates &
+Medium &
+51\% of the population is intermediate under the $\mathcal{N}(0.55, 0.18)$ model.
+Misclassifying intermediate students is the most common error (12--15\% error rate). \\[4pt]
+Binomial noise at $n=8$ &
+Low &
+8 binary observations cannot support 95\%+ accuracy theoretically. The 93\%
+threshold at $n=8$ partially mitigates this by only stopping extremely clear cases. \\[4pt]
+Response time assumption &
+Low &
+Time features assume a minimum response of 500 ms. Platform response times often
+exceed 5 s even for easy questions; absolute values are not used (self-normalised). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ============================================================================
+
+This project delivers a complete adaptive quiz pipeline, from raw question scraping to
+a deployed web application. The key technical contributions are:
+
+\begin{enumerate}[noitemsep]
+  \item A \textbf{21-feature vector} with self-normalised time-accuracy interaction
+        and variance-based features that recover intermediate-class recall from 35\%
+        to 86\%.
+  \item A \textbf{HistGradientBoosting classifier} with a categorical module feature,
+        outperforming Logistic Regression by 10 pp on the same data.
+  \item \textbf{Population-realistic training data} derived from the
+        $\mathcal{N}(0.55, 0.18)$ model, yielding a more honest 77\% CV metric on
+        the actual student distribution.
+  \item \textbf{Length-conditional confidence thresholds} that allow early stopping
+        at $n=8$ for high-confidence students while ensuring ambiguous cases answer
+        at least 12 questions.
+  \item Cross-domain generalisation to four real datasets, with 93\%+ accuracy on
+        Lectu/ENSIA and EdNet.
+\end{enumerate}
+
+The primary next step is replacing synthetic training data with real labelled sessions
+as the platform accumulates usage. Even a small real-student dataset (200--300 sessions
+per level) would allow fine-tuning the HistGBM and potentially push real-world accuracy
+above the 77\% synthetic estimate.
+
+% ============================================================================
+\section*{Acknowledgements}
+% ============================================================================
+
+Question bank sourced from Sanfoundry (\url{https://www.sanfoundry.com}).
+Real quiz data provided by ENSIA Data Mining and AI224 course instructors.
+EdNet dataset provided by Riiid Inc.\ under the CC BY-NC 4.0 licence.
+
+% ============================================================================
+\begin{thebibliography}{9}
+
+\bibitem{ednet}
+  Choi, Y., et al.\ (2020).
+  \emph{EdNet: A Large-Scale Hierarchical Dataset in Education}.
+  AIED 2020.
+
+\bibitem{histgbm}
+  Biau, G., and Scornet, E.\ (2016).
+  \emph{A Random Forest Guided Tour}.
+  TEST, 25(2), 197--227.
+
+\bibitem{irt}
+  Lord, F.\ M.\ (1980).
+  \emph{Applications of Item Response Theory to Practical Testing Problems}.
+  Erlbaum.
+
+\bibitem{cat}
+  Wainer, H.\ (1990).
+  \emph{Computerized Adaptive Testing: A Primer}.
+  Erlbaum.
+
+\bibitem{actlearn}
+  Settles, B.\ (2012).
+  \emph{Active Learning}.
+  Morgan \& Claypool.
+
+\bibitem{sklearn}
+  Pedregosa, F., et al.\ (2011).
+  \emph{Scikit-learn: Machine Learning in Python}.
+  JMLR, 12, 2825--2830.
+
+\bibitem{fastapi}
+  Ramírez, S.\ (2018).
+  FastAPI framework.
+  \url{https://fastapi.tiangolo.com}.
+
+\bibitem{platt}
+  Platt, J.\ (1999).
+  \emph{Probabilistic Outputs for Support Vector Machines}.
+  Advances in Large Margin Classifiers, MIT Press.
+
+\bibitem{qbc}
+  Seung, H.\ S., et al.\ (1992).
+  \emph{Query by Committee}.
+  COLT 1992.
+
+\end{thebibliography}
+
+\end{document}

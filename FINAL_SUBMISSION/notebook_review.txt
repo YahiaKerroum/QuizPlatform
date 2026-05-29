@@ -1,0 +1,371 @@
+
+--- MARKDOWN CELL 0 ---
+![image.png](attachment:image.png)
+# Adaptive Quiz ML Pipeline
+
+**Course:** Machine Learning, ENSIA, Spring 2025-2026
+**Project:** Adaptive Exam Preparation System using Active Learning
+
+...
+
+--- MARKDOWN CELL 1 ---
+## Executive Summary
+
+An end-to-end adaptive quiz pipeline trained on synthetic students (population model N(μ=0.55, σ=0.18)) and validated on four real datasets.
+
+| Metric | Value | Notes |
+|---|---|---|
+...
+
+--- MARKDOWN CELL 3 ---
+## Pipeline Architecture
+
+The diagram below shows all 9 stages of the pipeline, what data flows between them, and how the system moves from raw question bank curation through to adaptive session selection and real-data validation.
+
+![diagram_01_pipeline_architecture___9.png](attachment:diagram_01_pipeline_architecture___9.png)
+
+
+--- MARKDOWN CELL 5 ---
+### §0.2: Feature Matrix Construction
+
+`compute_features(hist_df, modules)` converts any answer history into the 25-feature vector. Called both for batch training (5 checkpoints per student) and live adaptive selection. Train/test split: 800 / 200 students.
+
+--- MARKDOWN CELL 6 ---
+### Feature Vector Map
+
+The 25-feature vector is grouped into five semantic categories below. The temporal/streak group contributes the most (+18.23pp in ablation study).
+
+![diagram_02_25_feature_vector___engin.png](attachment:diagram_02_25_feature_vector___engin.png)
+
+
+--- MARKDOWN CELL 8 ---
+### §0.3: Model Training
+
+`LogisticRegression` (L2, `class_weight='balanced'`, GridSearchCV over C ∈ {0.5, 1, 2, 5, 10}) is trained alongside NaiveBayes, DecisionTree, and RandomForest for comparison in §4. A 5-model QBC committee is also trained here for the adaptive strategy in §5.
+
+--- MARKDOWN CELL 10 ---
+### §0.4: Adaptive Simulation
+
+Each test student replays their pre-recorded answer history under four strategies (random, uncertainty, entropy, QBC), recording model prediction and confidence at every step. Using the same answer set across strategies keeps the comparison fair.
+
+--- MARKDOWN CELL 12 ---
+## §1: Question Bank Analysis
+
+Raw Sanfoundry MCQs went through three filtering passes: checking for complete answer choices, removing near-duplicates, and dropping modules with fewer than 150 questions. The result is a clean bank of 8,561 questions across 10 modules. Subtopics were extracted from the raw topic strings and seven questions were manually flagged for quality review.
+
+
+--- CODE CELL 14 HEADER ---
+# §2.1 — Difficulty vs Success Rate
+
+--- MARKDOWN CELL 15 ---
+### Discussion: Difficulty vs Success Rate
+
+Success rate drops from 70.5% on easy questions down to 29.7% on hard ones, giving a Pearson r close to -1. This is what item response theory predicts and it also confirms the difficulty labels are ordered correctly. If the labels were arbitrary, `acc_easy`, `acc_medium`, and `acc_hard` would add no real signal and the adaptive strategy would not work.
+
+The cold-start protocol (Q1 = easy, Q2 = hard, Q3 = medium) exists precisely because of this. It forces all three difficulty buckets to get a response in the first three questions. A session that starts with all medium questions would have `acc_easy` and `acc_hard` sitting at zero for a while, and the model's first few classifications would be based on weaker information.
+
+...
+
+--- MARKDOWN CELL 16 ---
+## §2: Synthetic Student Population
+
+### Design rationale
+1,000 students are drawn from **N(0.55, 0.18)**, a Gaussian centred slightly above
+0.50 to reflect a typical university cohort where most students pass.
+The standard deviation is wide enough that the level boundaries (0.45 / 0.70)
+...
+
+--- MARKDOWN CELL 18 ---
+### Discussion: Synthetic Population
+
+The **N(0.55, 0.18)** design places the level boundaries (0.45 / 0.70) inside the
+high-density region of the Gaussian. This is intentional:
+- The boundary at 0.45 sits at ~−0.56σ below the mean → ~28% of students are beginners.
+- The boundary at 0.70 sits at ~+0.83σ above the mean → ~20% are advanced.
+...
+
+--- MARKDOWN CELL 20 ---
+### Discussion: Feature Engineering
+
+**Correlation matrix:** `acc_easy`, `acc_medium`, `acc_hard` are moderately
+correlated (~0.6) because higher-ability students perform better across all
+difficulties. However they are not redundant: a student who aces easy questions
+but fails hard ones has a very different profile from one who fails everything;
+...
+
+--- MARKDOWN CELL 22 ---
+### Design Decision: Why Logistic Regression?
+
+| Classifier | Grouped CV | Pros | Cons | Decision |
+|---|---|---|---|---|
+| **Logistic Regression** | **89.20%** | Calibrated probabilities (needed for uncertainty strategy), fast, interpretable | Assumes linear boundary | **Selected** |
+| Random Forest | 88.77% | Slightly higher raw accuracy | No calibrated probabilities by default, 50× slower at inference | Not selected |
+...
+
+--- MARKDOWN CELL 23 ---
+### Classifier Selection Flow
+
+The diagram below shows the exact decision path from requirements to the final classifier choice.
+
+![diagram_03_classifier_selection___wh.png](attachment:diagram_03_classifier_selection___wh.png)
+
+
+--- MARKDOWN CELL 25 ---
+### Discussion: Calibration & Bias-Variance
+
+**Reliability diagram interpretation:** Points on the diagonal mean the model's
+confidence matches reality. The mean absolute gap (ECE, Expected Calibration Error)
+for LogReg sits below 0.05 across all three classes, this is what makes
+uncertainty sampling work. A miscalibrated model would say *"I'm 90% sure"* when
+...
+
+--- CODE CELL 26 HEADER ---
+# §4.2 — Ablated CV: 25 features vs 23 features (no time)
+
+--- MARKDOWN CELL 27 ---
+## §5: Adaptive Strategy Comparison
+
+Four strategies are compared: **random** (baseline), **uncertainty** (pick the question that minimises the gap between the top-two class probabilities), **entropy** (pick the question that maximises expected entropy reduction), and **QBC** (pick the question where a bootstrap committee disagrees most).
+
+All adaptive strategies operate on the probability vector **p** = (P(beg), P(int), P(adv)) produced by LogReg. They differ only in how they score candidate questions.
+
+...
+
+--- MARKDOWN CELL 29 ---
+### Discussion: Adaptive Strategies
+
+**The 33% question reduction** (QBC reaches 80% population accuracy at step 6;
+random takes until step 9) is the headline result of the simulation. In a
+30-question quiz session, this translates to roughly 4 fewer assessment questions
+per student; that time goes back to actual practice.
+...
+
+--- MARKDOWN CELL 30 ---
+### Uncertainty Sampling — Step-by-Step Decision Flow
+
+The diagram below shows how the uncertainty score is computed and how it drives question selection and stopping.
+
+![diagram_05_uncertainty_and_entropy_s.png](attachment:diagram_05_uncertainty_and_entropy_s.png)
+
+
+--- MARKDOWN CELL 32 ---
+### Discussion: Statistical Significance
+
+The paired t-test pairs each student's AUQC under **QBC** with the
+*same student's* AUQC under **random**. This removes between-student variance
+and isolates the strategy effect.
+
+...
+
+--- MARKDOWN CELL 34 ---
+### Discussion: Per-Module Performance
+
+Modules with **more labeled questions** (where difficulty labels cover a larger
+fraction of the question bank) tend to perform best because the per-module
+accuracy and flag features can populate with meaningful values. Modules where
+few questions carry difficulty labels result in sparser feature vectors for
+...
+
+--- CODE CELL 35 HEADER ---
+# §5.7 — Simulated New Students Validation
+
+--- MARKDOWN CELL 36 ---
+### Discussion: Simulated New Students
+
+The train-test gap is typically small (under 5 pp), confirming the model learns patterns in feature vectors, not student identities. The confusion matrix on the test set mirrors §4: hardest errors are intermediate students near the 0.45/0.70 boundary. These students generate genuinely ambiguous feature vectors  the model is failing where the problem is inherently uncertain, not due to overfitting. The stop criterion (confidence threshold) naturally asks more questions for these borderline cases.
+
+## §6: Borderline Analysis & Robustness
+
+...
+
+--- MARKDOWN CELL 38 ---
+### Discussion: Borderline Analysis & Robustness
+
+**Borderline students** are the hardest test for any level-detection system.
+A student at proficiency=0.46 (just above the beginner boundary) has nearly
+identical response patterns to one at 0.44, the model must pick up subtle
+differences in difficulty-stratified accuracy and streaks.
+...
+
+--- CODE CELL 39 HEADER ---
+# §6.5 — Robustness to Noisy Answers (30 Monte Carlo runs per noise level)
+
+--- MARKDOWN CELL 40 ---
+### Discussion: Noise Robustness
+
+The model tolerates noise because the 25-feature vector summarises an entire session: when one answer is wrong due to a misclick, `overall_acc` drops by only 1/n, `last3_acc` is affected only if the misclick was in the last 3 questions, and streak features reset but don't propagate. Accuracy drops below 80% only at 20%+ noise — well above realistic guessing rates. A student who randomly answers an entire session pushes all accuracy features toward 0.5, which the model reads as a weak intermediate rather than any confident label.
+
+## §6.6: Sensitivity Analysis: Difficulty Distribution Changes
+
+...
+
+--- CODE CELL 41 HEADER ---
+# §6.6 — Sensitivity Analysis: Difficulty Distribution Changes
+
+--- MARKDOWN CELL 42 ---
+### Discussion: Sensitivity Analysis
+
+The balanced condition (all three tiers present) achieves the highest accuracy,
+as expected. The interesting finding is how gracefully accuracy degrades when
+tiers are removed.
+
+...
+
+--- MARKDOWN CELL 43 ---
+## §7: Real Data: Data Mining Quizzes (ENSIA)
+
+**Source:** 5 quizzes administered on Google Forms, anonymised CSV exports.
+Each quiz has ~30 questions; answer keys are provided as JSON.
+
+### The Online Inflation Problem
+...
+
+--- CODE CELL 44 HEADER ---
+# §8 — Real Data Validation: Data Mining Quizzes (ENSIA)
+
+--- MARKDOWN CELL 46 ---
+## §8: Real Data: Operating Systems & ITE Quizzes (AI224 / ITE)
+
+**Source:** 22 Google-Forms quiz exports (XLSX), 11 OS/AI224 + 11 ITE.
+Each file has a `Score` column (out of the quiz total) and one column per question.
+
+**Limitation:**  The data is very skewed to the right , making results suspicious
+
+--- MARKDOWN CELL 50 ---
+### Discussion: OS/ITE Dataset
+
+**The 92% class imbalance** (578 of 626 students labelled advanced) is the defining
+characteristic of this dataset. It has two compounding causes:
+1. **Self-selection bias**, students who upload quiz results to the platform
+   are disproportionately engaged and high-scoring.
+...
+
+--- CODE CELL 51 HEADER ---
+# §9 — Real Data CV: Lectu/ENSIA and EdNet KT1/KT2
+
+--- MARKDOWN CELL 52 ---
+### Discussion: Lectu/ENSIA & EdNet Cross-Validation Results
+
+| Dataset | CV (leakage-free) | Majority | Gap | Interpretation |
+|---|---|---|---|---|
+| Lectu/ENSIA | 96.6% +/- 3.2% | 50.8% | +45.8pp | Operational definition; 118 students |
+| EdNet KT1 | 96.9% +/- 1.7% | 54.4% | +42.5pp | 1,107 students, tight CI |
+...
+
+--- MARKDOWN CELL 53 ---
+### Student Session Trace — xychart
+
+![diagram_07_student_session_trace___x.png](attachment:diagram_07_student_session_trace___x.png)
+
+
+--- MARKDOWN CELL 54 ---
+### Discussion: Lectu/ENSIA & EdNet Cross-Validation Results
+
+| Dataset | CV (leakage-free) | Majority | Gap | Interpretation |
+|---|---|---|---|---|
+| Lectu/ENSIA | 96.6% +/- 3.2% | 50.8% | +45.8pp | Operational definition; 118 students |
+| EdNet KT1 | 96.9% +/- 1.7% | 54.4% | +42.5pp | 1,107 students, tight CI |
+...
+
+--- MARKDOWN CELL 55 ---
+### Grouped CV vs Leaky CV
+
+![diagram_08_grouped_cv_vs_leaky_cv.png](attachment:diagram_08_grouped_cv_vs_leaky_cv.png)
+
+
+--- MARKDOWN CELL 56 ---
+## §10: Cross-Curriculum Generalisation Summary
+
+This table brings all CV results together, comparing each real dataset to the
+synthetic baseline. A gap of ≤ 5pp is considered consistent with good generalisation.
+
+--- CODE CELL 57 HEADER ---
+# §10 — Cross-Curriculum Generalisation Summary
+
+--- MARKDOWN CELL 58 ---
+### Generalisation Analysis: Why Each Dataset Tells a Different Story
+
+| Dataset | CV | Majority class | Gap | Root cause |
+|---|---|---|---|---|
+| Synthetic (25 feat) | **88.9%** | ~53% | +35.9pp | Reference (designed for this distribution) |
+| Lectu/ENSIA | **96.6%** | 50.8% | +45.8pp | Operational definition; 118 students |
+...
+
+--- MARKDOWN CELL 59 ---
+### Generalisation Decision Tree
+
+Feature-label consistency is the key predictor of whether the pipeline generalises. The diagram below shows how each dataset falls into the valid or broken benchmark category.
+
+![diagram_09_cross_curriculum_generali.png](attachment:diagram_09_cross_curriculum_generali.png)
+
+
+--- CODE CELL 60 HEADER ---
+# Unconditional: loads metrics dict or uses hardcoded fallbacks from the notebook results
+
+--- MARKDOWN CELL 61 ---
+## §12: Live Demo (Working Implementation)
+
+**Terminal demo:**
+```bash
+python scripts/run_demo.py --strategy uncertainty --module data-structure
+```
+...
+
+--- CODE CELL 62 HEADER ---
+# §13.1 — Feature Computation
+
+--- CODE CELL 63 HEADER ---
+# §13.2 — Predict Level, Adaptive Selection, Stop Criterion
+
+--- MARKDOWN CELL 64 ---
+## Section 14 — Single-Module Adaptive Assessment Model
+
+### Motivation: two session structures require two models
+
+The multi-module model (Sections 1–13) assumes a student completes **30 questions spread across six modules** in one session.  On the live platform, adaptive quizzes are **single-module** and terminate after 6–20 questions.  Three differences matter:
+
+...
+
+--- MARKDOWN CELL 65 ---
+### Architecture Comparison
+
+The diagram below illustrates the structural differences between the two session types and the resulting model choices.
+
+![diagram_10_multi_module_vs_single_mo.png](attachment:diagram_10_multi_module_vs_single_mo.png)
+
+
+--- MARKDOWN CELL 72 ---
+### 14.8 Multi-module vs single-module comparison
+
+| Property | Multi-module (§1–13) | Single-module (HistGBM) |
+|---|---|---|
+| Session structure | 30 Q, 6 modules | 8–20 Q, 1 module |
+| Features | 25 | **21** (1 categorical module_id) |
+...
+
+--- MARKDOWN CELL 75 ---
+### 14.9 Results
+
+| Session length | Accuracy |
+|---|---|
+| n = 8–11 (early-stop regime) | **76.4%** |
+| n = 12–15 | **78.8%** |
+...
+
+--- MARKDOWN CELL 77 ---
+## §15: Limitations & Honest Assessment
+
+| # | Limitation | Severity | Recommended fix |
+|---|---|---|---|
+| 1 | **Difficulty labels** are heuristic (60–70% raw human agreement) | High | Calibrate rubric; add medium-class validation examples |
+| 2 | **avg_time** correlated with proficiency on synthetic data; contribution: +19.7pp | Low | Ablated CV (23 feat: 69.25%) reported in §4.2 alongside full CV (88.95%) |
+...
+
+--- MARKDOWN CELL 79 ---
+## §16: Conclusion
+
+This project demonstrates that a compact, interpretable machine learning pipeline can meaningfully personalise a quiz-based learning experience — without requiring deep neural networks or massive labelled datasets.
+
+### What was achieved
+
+...

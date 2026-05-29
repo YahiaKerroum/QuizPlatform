@@ -17,7 +17,7 @@ async def start_session(
     db: AsyncPostgrestClient = Depends(get_db),
     current_student: dict = Depends(get_current_student),
 ) -> SessionStartOut:
-    return await create_session(db, current_student, payload.quiz_id)
+    return await create_session(db, current_student, payload.quiz_id, payload.adaptive)
 
 
 @router.post("/{session_id}/answers", response_model=AnswerOut)

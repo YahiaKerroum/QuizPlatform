@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from postgrest import AsyncPostgrestClient
 
-from ..auth import get_current_admin
+from ..auth import require_admin
 from ..database import get_db
 from ..schemas import (
     AdminQuizDetailOut,
@@ -13,9 +13,6 @@ from ..schemas import (
     ModuleCreateIn,
     ModuleOut,
     ModuleUpdateIn,
-    ProfileRoleOut,
-    ProfileRoleSetIn,
-    QuizDetailOut,
     QuizSummaryOut,
     QuizUpsertIn,
     SimBatchIn,
@@ -36,7 +33,7 @@ from ..services.export_service import stream_answers_csv
 from ..services.import_service import parse_csv, parse_json, process_import
 from ..services.profile_service import list_profiles, set_profile_role
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 def _ensure_admin(_admin_user: dict = Depends(get_current_admin)) -> None:

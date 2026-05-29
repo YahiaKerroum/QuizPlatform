@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
+import { StudentLogoutButton } from "@/components/auth/StudentLogoutButton";
 import { RichContent } from "@/components/content/RichContent";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -42,10 +43,13 @@ export default function ResultPage() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <Card className="space-y-8">
-        <div className="space-y-3">
-          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Session Result</p>
-          <h1 className="font-heading text-5xl text-ink">{result.correct} / {result.total}</h1>
-          <p className="text-lg text-ink/70">{Math.round(result.accuracy * 100)}% accuracy</p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Session Result</p>
+            <h1 className="font-heading text-5xl text-ink">{result.correct} / {result.total}</h1>
+            <p className="text-lg text-ink/70">{Math.round(result.accuracy * 100)}% accuracy</p>
+          </div>
+          <StudentLogoutButton />
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {Object.entries(result.by_difficulty).map(([difficulty, stats]) => (

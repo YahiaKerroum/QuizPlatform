@@ -1,3 +1,14 @@
+export interface TokenOut {
+  access_token: string;
+  token_type: string;
+  student_id: string;
+}
+
+export interface AdminAccessOut {
+  allowed: boolean;
+  email: string;
+}
+
 export interface QuestionOut {
   question_number: number;
   question_text: string;
@@ -86,6 +97,7 @@ export interface SessionStartOut {
   question: QuestionOut;
   question_number: number;
   total: number;
+  is_adaptive: boolean;
 }
 
 export interface AnswerOut {
@@ -94,6 +106,8 @@ export interface AnswerOut {
   question_number: number | null;
   total: number | null;
   session_id: string | null;
+  predicted_level: "beginner" | "intermediate" | "advanced" | null;
+  confidence: number | null;
 }
 
 export interface QuestionResultOut {
@@ -129,6 +143,7 @@ export interface SessionHistoryOut {
   total: number;
   correct: number;
   accuracy: number;
+  is_adaptive: boolean;
 }
 
 export interface ImportOut {
