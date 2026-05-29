@@ -1,50 +1,32 @@
 import os
-from collections.abc import AsyncGenerator
 from pathlib import Path
-
+from postgrest import AsyncPostgrestClient
 from dotenv import load_dotenv
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
 
-def _normalize_database_url(url: str | None) -> str:
-    if not url:
-        raise RuntimeError("DATABASE_URL is not set.")
-    if url.startswith("postgresql://"):
-        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return url
+if not SUPABASE_URL:
+    raise RuntimeError("SUPABASE_URL is not set.")
+if not SUPABASE_SECRET_KEY:
+    raise RuntimeError("SUPABASE_SECRET_KEY is not set.")
 
+def get_supabase_client() -> AsyncPostgrestClient:
+    url = f"{SUPABASE_URL}/rest/v1"
+    headers = {
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+    }
+    return AsyncPostgrestClient(url, headers=headers)
 
-DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL"))
-
-engine = create_async_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-)
-
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    autoflush=False,
-    expire_on_commit=False,
-)
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
-
+async def get_db() -> AsyncPostgrestClient:
+    return get_supabase_client()
 
 async def verify_database_connection() -> None:
-    async with engine.connect() as connection:
-        await connection.execute(text("SELECT 1"))
+    client = get_supabase_client()
+    try:
+        await client.table("profiles").select("*").limit(1).execute()
+    except Exception as e:
+        print(f"Supabase connection check failed: {e}")

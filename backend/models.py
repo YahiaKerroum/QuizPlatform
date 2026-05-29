@@ -1,3 +1,5 @@
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
 import uuid
 from datetime import datetime
 

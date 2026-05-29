@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { StudentLogoutButton } from "@/components/auth/StudentLogoutButton";
 import { QuizCard } from "@/components/dashboard/QuizCard";
 import { SessionHistory } from "@/components/dashboard/SessionHistory";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Toast } from "@/components/ui/Toast";
-import api from "@/lib/api";
+import api, { summarizeApiError } from "@/lib/api";
 import type { ModuleWithQuizzesOut, SessionHistoryOut, SessionStartOut } from "@/lib/types";
 
 export default function DashboardPage() {
@@ -30,8 +31,8 @@ export default function DashboardPage() {
         ]);
         setModules(modulesResponse.data);
         setHistory(historyResponse.data);
-      } catch {
-        setError("Could not load the dashboard.");
+      } catch (error) {
+        setError(summarizeApiError(error, "Could not load the dashboard."));
       }
     }
 
@@ -50,8 +51,8 @@ export default function DashboardPage() {
       const { data } = await api.post<SessionStartOut>("/sessions", { quiz_id: quizId, adaptive });
       sessionStorage.setItem("session_start", JSON.stringify(data));
       router.push(`/quiz/${data.session_id}`);
-    } catch {
-      setError("Could not start the quiz session.");
+    } catch (error) {
+      setError(summarizeApiError(error, "Could not start the quiz session."));
     } finally {
       setLoadingQuizId(null);
       setLoadingAdaptiveQuizId(null);

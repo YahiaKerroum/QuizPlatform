@@ -6,10 +6,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from postgrest import AsyncPostgrestClient
 
-from ..models import Module, Question, Quiz
 from ..schemas import ImportOut
 
 VALID_CHOICES = {"a", "b", "c", "d", "e", "f"}
@@ -176,7 +174,7 @@ def parse_json(content: bytes) -> list[dict[str, Any]]:
     return [_normalize_row(dict(row)) for row in data]
 
 
-async def process_import(db: AsyncSession, rows: list[dict[str, Any]]) -> ImportOut:
+async def process_import(db: AsyncPostgrestClient, rows: list[dict[str, Any]]) -> ImportOut:
     if not rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -252,10 +250,39 @@ async def process_import(db: AsyncSession, rows: list[dict[str, Any]]) -> Import
                 for row in rows
             ]
         )
-        .on_conflict_do_nothing(index_elements=[Question.quiz_id, Question.question_number])
-        .returning(Question.quiz_id, Question.question_number)
-    )
-    questions_inserted = len((await db.execute(question_stmt)).all())
+        existing_question_pairs = {
+            (row["quiz_id"], int(row["question_number"]))
+            for row in (existing_questions_resp.data or [])
+        }
+
+    question_rows = [
+        {
+            "quiz_id": row["quiz_id"],
+            "question_number": row["question_number"],
+            "question_text": row["question_text"],
+            "question_image_url": row["question_image_url"],
+            "choice_a": row["choice_a"],
+            "choice_a_image_url": row["choice_a_image_url"],
+            "choice_b": row["choice_b"],
+            "choice_b_image_url": row["choice_b_image_url"],
+            "choice_c": row["choice_c"],
+            "choice_c_image_url": row["choice_c_image_url"],
+            "choice_d": row["choice_d"],
+            "choice_d_image_url": row["choice_d_image_url"],
+            "choice_e": row["choice_e"],
+            "choice_e_image_url": row["choice_e_image_url"],
+            "choice_f": row["choice_f"],
+            "choice_f_image_url": row["choice_f_image_url"],
+            "correct_answer": row["correct_answer"],
+            "difficulty": None,
+        }
+        for row in rows
+        if (row["quiz_id"], int(row["question_number"])) not in existing_question_pairs
+    ]
+
+    if question_rows:
+        await db.table("questions").insert(question_rows).execute()
+    questions_inserted = len(question_rows)
 
     return ImportOut(
         quizzes_created=quizzes_created,

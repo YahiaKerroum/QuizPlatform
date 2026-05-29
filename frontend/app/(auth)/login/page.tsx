@@ -1,23 +1,36 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Toast } from "@/components/ui/Toast";
-import { setToken } from "@/lib/auth";
-import api from "@/lib/api";
-import type { TokenOut } from "@/lib/types";
+import { setTokenWithExpiry } from "@/lib/auth";
+import { summarizeFormError } from "@/lib/form";
+import { supabase } from "@/lib/supabase";
+import { loginSchema } from "@/lib/validation";
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    mode: "onTouched",
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
   function summarizeError(err: unknown) {
     if (typeof err === "object" && err && "response" in err) {
@@ -34,9 +47,22 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
+    const parsed = loginSchema.safeParse(formData);
+    if (!parsed.success) {
+      setError(`Login failed: ${summarizeFormError(parsed.error, "Check your email and password.")}`);
+      return;
+    }
+
     try {
-      const { data } = await api.post<TokenOut>("/auth/login", { email, password });
-      setToken(data.access_token);
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: parsed.data.email,
+        password: parsed.data.password,
+      });
+      if (signInError || !authData.session?.access_token) {
+        throw signInError ?? new Error("Missing Supabase session.");
+      }
+
+      setTokenWithExpiry(authData.session.access_token, authData.session.expires_in ?? 3600);
       router.push("/dashboard");
     } catch (err) {
       setError(summarizeError(err));
@@ -61,11 +87,35 @@ export default function LoginPage() {
             <p className="mt-2 text-sm text-ink/70">Use your student account to continue.</p>
           </div>
           {error ? <Toast message={error} tone="error" /> : null}
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <Input type="email" placeholder="Email address" value={email} onChange={(event) => setEmail(event.target.value)} />
-            <Input type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} />
-            <Button className="w-full" variant="secondary" disabled={loading} type="submit">
-              {loading ? "Signing in..." : "Login"}
+          <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+            <div className="space-y-2">
+              <Input
+                type="email"
+                placeholder="Email address"
+                autoComplete="email"
+                {...register("email", {
+                  required: "Email is required.",
+                  pattern: {
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    message: "Enter a valid email address.",
+                  },
+                })}
+              />
+              {errors.email ? <p className="text-xs text-red-700">{errors.email.message}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Input
+                type="password"
+                placeholder="Password"
+                autoComplete="current-password"
+                {...register("password", {
+                  required: "Password is required.",
+                })}
+              />
+              {errors.password ? <p className="text-xs text-red-700">{errors.password.message}</p> : null}
+            </div>
+            <Button className="w-full" variant="secondary" disabled={isSubmitting} type="submit">
+              {isSubmitting ? "Signing in..." : "Login"}
             </Button>
           </form>
           <p className="text-sm text-ink/70">

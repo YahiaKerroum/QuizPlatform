@@ -1,24 +1,17 @@
-import os
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
-import bcrypt
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from postgrest import AsyncPostgrestClient
 
 from .database import get_db
-from .models import Student
+from .supabase_auth import get_user_from_token
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
+bearer_scheme = HTTPBearer(auto_error=False)
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY is not set.")
 
 ADMIN_ALLOWED_EMAILS = {
     email.strip().lower()
@@ -31,16 +24,18 @@ ACCESS_TOKEN_EXPIRE_DAYS = 7
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def hash_password(plain: str) -> str:
-    hashed = bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt())
-    return hashed.decode("utf-8")
+async def _get_profile_by_email(email: str, db: AsyncPostgrestClient) -> dict | None:
+    result = await db.table("profiles").select("*").eq("email", email).maybe_single().execute()
+    return result.data if result is not None else None
 
 
-def verify_password(plain: str, hashed: str) -> bool:
+def _parse_uuid(value: object) -> UUID | None:
+    if not isinstance(value, str):
+        return None
     try:
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except ValueError:
-        return False
+        return UUID(value)
+    except (ValueError, TypeError):
+        return None
 
 
 def create_access_token(student_id: UUID) -> str:
@@ -52,6 +47,12 @@ def create_access_token(student_id: UUID) -> str:
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
+    user_id = _parse_uuid(user_data.get("id"))
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+        )
 
 def is_admin_email(email: str) -> bool:
     return email.strip().lower() in ADMIN_ALLOWED_EMAILS
@@ -76,26 +77,37 @@ def verify_token(token: str) -> UUID:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token.",
-        ) from exc
+        )
+    return email
 
 
-async def get_current_student(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> Student:
+async def _get_user_data(credentials: HTTPAuthorizationCredentials | None) -> dict:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authentication token.",
         )
 
-    student_id = verify_token(credentials.credentials)
-    result = await db.execute(select(Student).where(Student.id == student_id))
-    student = result.scalar_one_or_none()
-    if student is None:
+    try:
+        return get_user_from_token(credentials.credentials)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Student not found.",
+            detail="Invalid authentication token.",
+        ) from exc
+
+
+async def get_current_student(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncPostgrestClient = Depends(get_db),
+) -> dict:
+    user_data = await _get_user_data(credentials)
+    email = _extract_email(user_data)
+    student = await _resolve_student_by_email(email, db)
+    if bool(student.get("is_synthetic")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Synthetic users cannot access this route.",
         )
     return student
 
