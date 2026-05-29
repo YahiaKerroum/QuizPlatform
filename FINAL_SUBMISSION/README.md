@@ -21,9 +21,12 @@ This folder contains the essential datasets required to run `FinalSubmissionRevi
 
 ## 🚀 How to Evaluate
 
+**⚠️ CRITICAL SETUP REQUIREMENT:** 
+The notebook relies on local relative paths. You **must** keep `FinalSubmissionReviewed.ipynb` and the `data/` folder in the exact same directory. Do not move the notebook out of this folder, or the data loading steps will fail.
+
 1. Open **`FinalSubmissionReviewed.ipynb`**. 
 2. You can run the notebook sequentially from top to bottom. 
-3. The notebook will automatically load the local data provided in the `data/` folder and output all metrics, heatmaps, and cross-validation reports.
+3. The notebook will automatically load the local data provided in the adjacent `data/` folder and output all metrics, heatmaps, and cross-validation reports.
 4. **Dependencies:** Ensure you have the standard data science stack installed (`pandas`, `numpy`, `scikit-learn`, `matplotlib`, `seaborn`) as well as `catboost` for the final adaptive classifier.
 
 ---
