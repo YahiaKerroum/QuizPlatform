@@ -11,7 +11,6 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Toast } from "@/components/ui/Toast";
 import { setTokenWithExpiry } from "@/lib/auth";
-import { summarizeFormError } from "@/lib/form";
 import { supabase } from "@/lib/supabase";
 import { registerSchema } from "@/lib/validation";
 
@@ -51,22 +50,13 @@ export default function RegisterPage() {
     return "Registration failed. Make sure the email is unique and the password is at least 8 characters.";
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
+  async function onSubmit(data: RegisterFormData) {
     setError(null);
     setSuccess(null);
-
-    const parsed = registerSchema.safeParse(formData);
-    if (!parsed.success) {
-      setError(`Registration failed: ${summarizeFormError(parsed.error, "Please try again.")}`);
-      return;
-    }
-
     try {
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: parsed.data.email,
-        password: parsed.data.password,
+        email: data.email,
+        password: data.password,
       });
       if (signUpError) {
         throw signUpError;
@@ -79,8 +69,8 @@ export default function RegisterPage() {
       }
 
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: parsed.data.email,
-        password: parsed.data.password,
+        email: data.email,
+        password: data.password,
       });
       if (signInError || !signInData.session?.access_token) {
         throw signInError ?? new Error("Missing Supabase session.");
@@ -90,8 +80,6 @@ export default function RegisterPage() {
       router.push("/dashboard");
     } catch (err) {
       setError(summarizeError(err));
-    } finally {
-      setLoading(false);
     }
   }
 

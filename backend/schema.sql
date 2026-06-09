@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     quiz_id TEXT NOT NULL REFERENCES quizzes(id),
+    is_adaptive BOOLEAN NOT NULL DEFAULT FALSE,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     ended_at TIMESTAMPTZ
 );

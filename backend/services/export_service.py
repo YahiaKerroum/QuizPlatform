@@ -2,7 +2,7 @@ import csv
 import io
 from collections.abc import AsyncGenerator
 
-from ..database import get_supabase_client
+from ..database import get_admin_db
 
 
 def _csv_row(values: list[object | None]) -> str:
@@ -28,7 +28,7 @@ async def stream_answers_csv() -> AsyncGenerator[str, None]:
     ]
     yield _csv_row(header)
 
-    db = get_supabase_client()
+    db = get_admin_db()
     page_size = 1000
     offset = 0
 

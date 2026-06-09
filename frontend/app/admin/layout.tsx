@@ -72,7 +72,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {link.label}
           </Link>
         ))}
-        <LogoutButton className="ml-auto" />
       </nav>
       <p className="mb-6 text-xs text-ink/65">Admin access is role-based and controlled from profile roles.</p>
       {children}

@@ -51,4 +51,17 @@ if (!attached) {
   attached = true;
 }
 
+export function summarizeApiError(error: unknown, fallback: string): string {
+  if (error && typeof error === "object" && "response" in error) {
+    const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) {
+      return detail;
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export default api;

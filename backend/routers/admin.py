@@ -13,6 +13,8 @@ from ..schemas import (
     ModuleCreateIn,
     ModuleOut,
     ModuleUpdateIn,
+    ProfileRoleOut,
+    ProfileRoleSetIn,
     QuizSummaryOut,
     QuizUpsertIn,
     SimBatchIn,
@@ -36,15 +38,10 @@ from ..services.profile_service import list_profiles, set_profile_role
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
-def _ensure_admin(_admin_user: dict = Depends(get_current_admin)) -> None:
-    return None
-
-
 @router.post("/import", response_model=ImportOut)
 async def import_questions(
     file: UploadFile = File(...),
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> ImportOut:
     content = await file.read()
     filename = (file.filename or "").lower()
@@ -73,7 +70,6 @@ async def import_questions(
 async def bulk_create_synthetic_students(
     payload: BulkStudentsIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> list[SyntheticStudentOut]:
     created = await create_synthetic_students(db, payload)
     return [SyntheticStudentOut.model_validate(item) for item in created]
@@ -83,7 +79,6 @@ async def bulk_create_synthetic_students(
 async def run_simulation_batch(
     payload: SimBatchIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> SimBatchOut:
     return await simulate_batch(db, payload)
 
@@ -92,7 +87,6 @@ async def run_simulation_batch(
 async def set_question_difficulty(
     payload: DifficultyIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> DifficultyOut:
     return await update_question_difficulties(db, payload)
 
@@ -100,7 +94,6 @@ async def set_question_difficulty(
 @router.get("/modules", response_model=list[ModuleOut])
 async def get_modules(
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> list[ModuleOut]:
     return await list_modules(db)
 
@@ -109,7 +102,6 @@ async def get_modules(
 async def add_module(
     payload: ModuleCreateIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> ModuleOut:
     return await create_module(db, payload)
 
@@ -119,7 +111,6 @@ async def edit_module(
     module_id: str,
     payload: ModuleUpdateIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> ModuleOut:
     return await update_module(db, module_id, payload)
 
@@ -127,7 +118,6 @@ async def edit_module(
 @router.get("/quizzes", response_model=list[QuizSummaryOut])
 async def get_admin_quizzes(
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> list[QuizSummaryOut]:
     return await list_quizzes(db)
 
@@ -136,7 +126,6 @@ async def get_admin_quizzes(
 async def get_admin_quiz(
     quiz_id: str,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> AdminQuizDetailOut:
     return await get_admin_quiz_detail(db, quiz_id)
 
@@ -145,7 +134,6 @@ async def get_admin_quiz(
 async def add_quiz(
     payload: QuizUpsertIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> AdminQuizDetailOut:
     return await create_quiz(db, payload)
 
@@ -155,13 +143,12 @@ async def edit_quiz(
     quiz_id: str,
     payload: QuizUpsertIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> AdminQuizDetailOut:
     return await update_quiz(db, quiz_id, payload)
 
 
 @router.get("/export/answers")
-async def export_answers(_: None = Depends(_ensure_admin)) -> StreamingResponse:
+async def export_answers() -> StreamingResponse:
     return StreamingResponse(
         stream_answers_csv(),
         media_type="text/csv",
@@ -172,7 +159,6 @@ async def export_answers(_: None = Depends(_ensure_admin)) -> StreamingResponse:
 @router.get("/profiles", response_model=list[ProfileRoleOut])
 async def get_profiles(
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> list[ProfileRoleOut]:
     return await list_profiles(db)
 
@@ -181,6 +167,5 @@ async def get_profiles(
 async def update_profile_role(
     payload: ProfileRoleSetIn,
     db: AsyncPostgrestClient = Depends(get_db),
-    _: None = Depends(_ensure_admin),
 ) -> ProfileRoleOut:
     return await set_profile_role(db, payload)

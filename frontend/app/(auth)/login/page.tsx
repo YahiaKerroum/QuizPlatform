@@ -11,7 +11,6 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Toast } from "@/components/ui/Toast";
 import { setTokenWithExpiry } from "@/lib/auth";
-import { summarizeFormError } from "@/lib/form";
 import { supabase } from "@/lib/supabase";
 import { loginSchema } from "@/lib/validation";
 
@@ -42,32 +41,20 @@ export default function LoginPage() {
     return "Login failed. Check your email and password.";
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
+  async function onSubmit(data: LoginFormData) {
     setError(null);
-
-    const parsed = loginSchema.safeParse(formData);
-    if (!parsed.success) {
-      setError(`Login failed: ${summarizeFormError(parsed.error, "Check your email and password.")}`);
-      return;
-    }
-
     try {
       const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: parsed.data.email,
-        password: parsed.data.password,
+        email: data.email,
+        password: data.password,
       });
       if (signInError || !authData.session?.access_token) {
         throw signInError ?? new Error("Missing Supabase session.");
       }
-
       setTokenWithExpiry(authData.session.access_token, authData.session.expires_in ?? 3600);
       router.push("/dashboard");
     } catch (err) {
       setError(summarizeError(err));
-    } finally {
-      setLoading(false);
     }
   }
 
