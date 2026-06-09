@@ -60,9 +60,15 @@ function QuizSessionView({
 
   useEffect(() => {
     if (quiz.state.done) {
+      if (quiz.state.predictedLevel) {
+        sessionStorage.setItem(
+          `level_${sessionId}`,
+          JSON.stringify({ predictedLevel: quiz.state.predictedLevel, confidence: quiz.state.confidence }),
+        );
+      }
       router.replace(`/result/${sessionId}`);
     }
-  }, [quiz.state.done, router, sessionId]);
+  }, [quiz.state.done, quiz.state.predictedLevel, quiz.state.confidence, router, sessionId]);
 
   const { predictedLevel, confidence, isAdaptive } = quiz.state;
 

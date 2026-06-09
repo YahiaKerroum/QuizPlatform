@@ -11,11 +11,25 @@ import { Toast } from "@/components/ui/Toast";
 import api from "@/lib/api";
 import type { ResultOut } from "@/lib/types";
 
+const LEVEL_COLORS = {
+  beginner: "border-amber-200 bg-amber-50 text-amber-800",
+  intermediate: "border-blue-200 bg-blue-50 text-blue-800",
+  advanced: "border-emerald-200 bg-emerald-50 text-emerald-800",
+};
+
+const LEVEL_LABELS = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+};
+
 export default function ResultPage() {
   const params = useParams<{ sessionId: string }>();
   const router = useRouter();
   const [result, setResult] = useState<ResultOut | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [predictedLevel, setPredictedLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
+  const [confidence, setConfidence] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadResult() {
@@ -25,6 +39,15 @@ export default function ResultPage() {
       } catch {
         setError("Could not load the result page.");
       }
+    }
+
+    const raw = sessionStorage.getItem(`level_${params.sessionId}`);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { predictedLevel: "beginner" | "intermediate" | "advanced"; confidence: number | null };
+        setPredictedLevel(parsed.predictedLevel);
+        setConfidence(parsed.confidence);
+      } catch { /* ignore malformed */ }
     }
 
     void loadResult();
@@ -48,6 +71,18 @@ export default function ResultPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-clay">Session Result</p>
             <h1 className="font-heading text-5xl text-ink">{result.correct} / {result.total}</h1>
             <p className="text-lg text-ink/70">{Math.round(result.accuracy * 100)}% accuracy</p>
+            {predictedLevel && (
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-semibold ${LEVEL_COLORS[predictedLevel]}`}>
+                  <span className="h-2 w-2 rounded-full bg-current opacity-60" />
+                  {LEVEL_LABELS[predictedLevel]}
+                  {confidence !== null && (
+                    <span className="opacity-60">{Math.round(confidence * 100)}% confidence</span>
+                  )}
+                </span>
+                <span className="text-sm text-ink/50">Predicted level</span>
+              </div>
+            )}
           </div>
           <StudentLogoutButton />
         </div>

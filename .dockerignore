@@ -1,0 +1,18 @@
+# Python runtime artifacts
+backend/.venv
+backend/venv
+**/__pycache__
+**/*.pyc
+
+# Secrets (pass these at runtime with --env-file)
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Not needed in the image
+frontend
+FINAL_SUBMISSION
+*.csv
+.git
+backend/.claude
+backend/.mcp.json
