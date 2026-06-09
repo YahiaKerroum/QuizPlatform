@@ -1,5 +1,6 @@
 # AGENTS.md
 
+
 ## Structure
 - Two runnable apps only: `backend/` (FastAPI + async SQLAlchemy) and `frontend/` (Next.js 14 App Router).
 - No repo-level task runner, no CI workflows, and no automated tests checked in.
