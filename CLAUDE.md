@@ -16,6 +16,10 @@ psql -d <db> -f backend/schema.sql
 # Run
 uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 # Swagger UI: http://127.0.0.1:8000/docs
+
+# Test (pure-function unit tests, no DB required; run from repo root)
+pip install -r backend/requirements-dev.txt
+pytest
 ```
 
 **Frontend** (from `frontend/`):
@@ -28,14 +32,14 @@ npm run build
 
 ## Architecture
 
-Two apps: `backend/` (FastAPI + async postgrest → Supabase) and `frontend/` (Next.js 14 App Router). No test suite is checked in.
+Two apps: `backend/` (FastAPI + async postgrest → Supabase) and `frontend/` (Next.js 14 App Router). `backend/tests/` covers ML feature/strategy logic, answer shuffling, and admin auth with pure-function/mocked-dependency tests (no live DB); nothing covers the full request/session flow end-to-end yet.
 
 ### Backend
 
 - **`backend/main.py`** — FastAPI app, mounts four routers under `/auth`, `/quizzes`, `/sessions`, `/admin`.
 - **`backend/database.py`** — Loads `backend/.env` by explicit path (not CWD). Builds an `AsyncPostgrestClient` from `SUPABASE_URL` + `SUPABASE_SECRET_KEY`. Hard-fails on startup if either is missing.
-- **`backend/auth.py`** — JWT creation/verification (7-day tokens, `HS256`). Admin access is controlled by `ADMIN_ALLOWED_EMAILS` env var (comma-separated). `get_current_student` and `require_admin` are FastAPI dependencies.
-- **`backend/routers/`** — Thin routers that delegate to services. `admin.py` routes are currently unauthenticated in router wiring.
+- **`backend/auth.py`** — JWT creation/verification (7-day tokens, `HS256`). Admin access is gated on the `profiles.role` column; `ADMIN_ALLOWED_EMAILS` (comma-separated env var) is only a bootstrap allowlist for granting the first admin role. `get_current_student` and `require_admin` are FastAPI dependencies.
+- **`backend/routers/`** — Thin routers that delegate to services. `admin.py` requires `require_admin` at router level (`dependencies=[Depends(require_admin)]`).
 - **`backend/services/session_service.py`** — Core quiz flow. Non-adaptive mode enforces strict sequential `question_number`; adaptive mode accepts any unanswered question number. `response_time_ms` must be 1–599999.
 - **`backend/services/ml_service.py`** — Adaptive question selection. Loads `ai/models/best_model_single_module.pkl` lazily (falls back to rule-based if missing). Exposes `compute_features` (returns a `(1, 21)` ndarray), `predict_level`, `select_next_question`, and `should_stop`. The 21-feature vector order is fixed — changing it breaks the model.
 
@@ -52,8 +56,9 @@ The adaptive quiz flow:
 1. Cold-start: first question is the easiest available (`difficulty = 'easy'`).
 2. After each answer, `session_service._submit_adaptive` calls `ml_service.compute_features` on the full answer history, then `predict_level` and `should_stop`.
 3. Stop criterion: minimum 8 questions, maximum 20, early stop when model confidence exceeds a session-length-dependent threshold (0.75–0.85).
-4. Next question is selected by `select_next_question` which targets a difficulty tier based on current accuracy and error streaks.
+4. Next question is selected by `select_next_question`, called with `strategy="entropy"`. For every unanswered candidate it simulates both possible outcomes, scores the resulting posteriors with one batched `predict_proba` call, and picks the item with the highest expected information gain (or expected least-confidence for `strategy="margin"/"uncertainty"`); `strategy="random"` serves a uniform pick. Falls back to accuracy/error-streak difficulty targeting when no raw answer history is supplied.
 5. The six supported module slugs are in `MODULES_ORDER` in `ml_service.py` — unrecognized slugs map to index 0.
+6. Answer choices are shown in a per-`(session_id, question_number)` shuffled order (`services/shuffle.py`) and unshuffled server-side before grading — storage order and result review are unaffected.
 
 ### Key Invariants
 
@@ -67,5 +72,5 @@ The adaptive quiz flow:
 
 | File | Key vars |
 |------|----------|
-| `backend/.env` | `DATABASE_URL`, `SECRET_KEY`, `ADMIN_ALLOWED_EMAILS`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` |
+| `backend/.env` | `DATABASE_URL`, `SECRET_KEY`, `ADMIN_ALLOWED_EMAILS`, `CORS_ALLOWED_ORIGINS`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` |
 | `frontend/.env.local` | `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000` |
