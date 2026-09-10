@@ -265,7 +265,16 @@ async def _submit_adaptive(
 
     candidate_nums = [int(q["question_number"]) for q in remaining]
     candidate_diffs = [q.get("difficulty") for q in remaining]
-    next_num = ml_service.select_next_question(features, candidate_nums, candidate_diffs, strategy="entropy")
+    next_num = ml_service.select_next_question(
+        features,
+        candidate_nums,
+        candidate_diffs,
+        strategy="entropy",
+        is_correct_list=is_correct_list,
+        difficulty_list=difficulty_list,
+        time_ms_list=time_ms_list,
+        module_list=module_list,
+    )
     next_question = next((q for q in remaining if int(q["question_number"]) == next_num), remaining[0])
 
     return AnswerOut(

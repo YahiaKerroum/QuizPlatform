@@ -242,19 +242,120 @@ def predict_level(features: np.ndarray) -> dict:
     return {"level": level, "confidence": confidence, "probabilities": proba_dict}
 
 
-def select_next_question(
+def _predict_proba_batch(features_matrix: np.ndarray) -> np.ndarray:
+    """Return (n, 3) probabilities over _LEVELS for a batch of feature rows.
+
+    Uses one vectorised model call when the trained model is available --
+    this is what keeps candidate scoring at one predict_proba call instead of
+    one per candidate.
+    """
+    model = _load_model()
+    if model is not None:
+        try:
+            proba = model.predict_proba(features_matrix)
+            classes = [str(c) for c in getattr(model, "classes_", _LEVELS)]
+            out = np.zeros((features_matrix.shape[0], len(_LEVELS)))
+            for j, level in enumerate(_LEVELS):
+                if level in classes:
+                    out[:, j] = proba[:, classes.index(level)]
+            return out
+        except Exception as exc:
+            logger.error("batch predict_proba failed: %s -- using fallback", exc)
+
+    out = np.zeros((features_matrix.shape[0], len(_LEVELS)))
+    for i in range(features_matrix.shape[0]):
+        pred = predict_level(features_matrix[i : i + 1])
+        for j, level in enumerate(_LEVELS):
+            out[i, j] = pred["probabilities"].get(level, 0.0)
+    return out
+
+
+def _entropy(proba: np.ndarray) -> np.ndarray:
+    p = np.clip(proba, 1e-12, 1.0)
+    return -np.sum(p * np.log(p), axis=1)
+
+
+def _margin(proba: np.ndarray) -> np.ndarray:
+    sorted_p = np.sort(proba, axis=1)
+    return sorted_p[:, -1] - sorted_p[:, -2]
+
+
+def _p_correct_for_difficulty(f: np.ndarray, difficulty: str | None) -> float:
+    """Rough P(correct) for an item of this difficulty, from the student's own
+    difficulty-tier accuracy so far (falls back to overall accuracy for a tier
+    they haven't seen yet). Clipped away from 0/1 so neither outcome is ever
+    treated as impossible.
+    """
+    diff = str(difficulty).lower().strip() if difficulty else "medium"
+    acc_idx = {"easy": 1, "medium": 2, "hard": 3}.get(diff, 2)
+    has_idx = {"easy": 4, "medium": 5, "hard": 6}.get(diff, 5)
+    if bool(f[has_idx]):
+        return float(np.clip(f[acc_idx], 0.05, 0.95))
+    return float(np.clip(f[0], 0.05, 0.95))
+
+
+def _select_by_acquisition(
     features: np.ndarray,
     candidate_question_numbers: list[int],
     candidate_difficulties: list[str | None],
-    strategy: str = "uncertainty",
+    strategy: str,
+    is_correct_list: list[bool],
+    difficulty_list: list[str | None],
+    time_ms_list: list[int],
+    module_list: list[str | None],
 ) -> int:
-    """Pick the next question by targeting the appropriate difficulty tier."""
-    if not candidate_question_numbers:
-        raise ValueError("No candidate questions remaining.")
+    """Score every candidate by expected information gain (entropy) or expected
+    least-confidence (margin), simulating both possible outcomes for each item.
 
-    if strategy == "random":
-        return random.choice(candidate_question_numbers)
+    Mirrors the notebook's acquisition-function comparison: for every candidate
+    item, look ahead at what the posterior would be after a correct vs. an
+    incorrect answer, weight by the student's own estimated P(correct) for that
+    item's difficulty, and score accordingly. All 2*n hypothetical feature rows
+    are built once and scored in a single batched predict_proba call.
+    """
+    avg_time = int(np.mean(time_ms_list)) if time_ms_list else 5000
+    last_module = module_list[-1] if module_list else None
 
+    hypo_rows = []
+    for diff in candidate_difficulties:
+        for outcome in (True, False):
+            hypo_rows.append(
+                compute_features(
+                    is_correct_list + [outcome],
+                    difficulty_list + [diff],
+                    time_ms_list + [avg_time],
+                    module_list + [last_module],
+                )[0]
+            )
+    hypo_features = np.vstack(hypo_rows)  # rows: [q0_correct, q0_wrong, q1_correct, q1_wrong, ...]
+
+    proba = _predict_proba_batch(hypo_features)
+    proba_correct = proba[0::2]
+    proba_wrong = proba[1::2]
+
+    f = features[0]
+    p_correct = np.array([_p_correct_for_difficulty(f, d) for d in candidate_difficulties])
+
+    if strategy == "entropy":
+        current_entropy = float(_entropy(_predict_proba_batch(features))[0])
+        expected_posterior_entropy = (
+            p_correct * _entropy(proba_correct) + (1 - p_correct) * _entropy(proba_wrong)
+        )
+        scores = current_entropy - expected_posterior_entropy  # expected information gain
+    else:  # "margin" / "uncertainty" -- least-confidence sampling
+        expected_margin = p_correct * _margin(proba_correct) + (1 - p_correct) * _margin(proba_wrong)
+        scores = 1.0 - expected_margin
+
+    best_i = int(np.argmax(scores))
+    return candidate_question_numbers[best_i]
+
+
+def _select_by_difficulty_target(
+    features: np.ndarray,
+    candidate_question_numbers: list[int],
+    candidate_difficulties: list[str | None],
+) -> int:
+    """Fallback: target a difficulty tier from accuracy/error-streak thresholds."""
     f = features[0]
     overall_acc  = float(f[0])
     has_medium   = bool(f[5])
@@ -284,6 +385,49 @@ def select_next_question(
             best_score, best_idx = score, i
 
     return candidate_question_numbers[best_idx]
+
+
+def select_next_question(
+    features: np.ndarray,
+    candidate_question_numbers: list[int],
+    candidate_difficulties: list[str | None],
+    strategy: str = "uncertainty",
+    *,
+    is_correct_list: list[bool] | None = None,
+    difficulty_list: list[str | None] | None = None,
+    time_ms_list: list[int] | None = None,
+    module_list: list[str | None] | None = None,
+) -> int:
+    """Pick the next question.
+
+    "entropy" and "margin"/"uncertainty" run the real acquisition-function loop
+    (requires the raw answer history so hypothetical outcomes can be simulated).
+    "random" serves a uniform pick -- the exposure-control / unbiased-calibration
+    probe. Anything else, or entropy/margin without history, falls back to
+    difficulty-tier targeting.
+    """
+    if not candidate_question_numbers:
+        raise ValueError("No candidate questions remaining.")
+
+    if strategy == "random":
+        return random.choice(candidate_question_numbers)
+
+    history_available = (
+        is_correct_list is not None and difficulty_list is not None and time_ms_list is not None
+    )
+    if strategy in ("entropy", "margin", "uncertainty") and history_available:
+        return _select_by_acquisition(
+            features,
+            candidate_question_numbers,
+            candidate_difficulties,
+            strategy,
+            is_correct_list,
+            difficulty_list,
+            time_ms_list,
+            module_list or [],
+        )
+
+    return _select_by_difficulty_target(features, candidate_question_numbers, candidate_difficulties)
 
 
 def should_stop(features: np.ndarray, n_answered: int) -> bool:
