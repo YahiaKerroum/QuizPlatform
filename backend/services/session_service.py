@@ -244,9 +244,11 @@ async def _submit_adaptive(
     confidence = prediction["confidence"]
 
     if ml_service.should_stop(features, n_answered):
-        await db.table("sessions").update(
-            {"ended_at": datetime.now(timezone.utc).isoformat()}
-        ).eq("id", str(session_id)).execute()
+        await db.table("sessions").update({
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "predicted_level": predicted_level,
+            "confidence": confidence,
+        }).eq("id", str(session_id)).execute()
         return AnswerOut(
             done=True,
             session_id=session_id,
@@ -258,9 +260,11 @@ async def _submit_adaptive(
     remaining = [q for q in all_questions if int(q["question_number"]) not in answered_nums]
 
     if not remaining:
-        await db.table("sessions").update(
-            {"ended_at": datetime.now(timezone.utc).isoformat()}
-        ).eq("id", str(session_id)).execute()
+        await db.table("sessions").update({
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "predicted_level": predicted_level,
+            "confidence": confidence,
+        }).eq("id", str(session_id)).execute()
         return AnswerOut(done=True, session_id=session_id, predicted_level=predicted_level, confidence=confidence)
 
     candidate_nums = [int(q["question_number"]) for q in remaining]
@@ -364,6 +368,8 @@ async def get_result(db: AsyncPostgrestClient, session_id: UUID, student: dict) 
         accuracy=accuracy,
         by_difficulty=by_difficulty,
         by_question=by_question,
+        predicted_level=session.get("predicted_level"),
+        confidence=session.get("confidence"),
     )
 
 

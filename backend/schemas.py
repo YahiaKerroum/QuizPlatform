@@ -188,6 +188,8 @@ class ResultOut(APIModel):
     accuracy: float
     by_difficulty: dict[str, dict[str, int | float | None]]
     by_question: list[QuestionResultOut]
+    predicted_level: Literal["beginner", "intermediate", "advanced"] | None = None
+    confidence: float | None = None
 
 
 class SessionHistoryOut(APIModel):

@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     quiz_id TEXT NOT NULL REFERENCES quizzes(id),
     is_adaptive BOOLEAN NOT NULL DEFAULT FALSE,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ended_at TIMESTAMPTZ
+    ended_at TIMESTAMPTZ,
+    predicted_level TEXT CHECK (predicted_level IN ('beginner', 'intermediate', 'advanced')),
+    confidence REAL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1))
 );
 
 CREATE TABLE IF NOT EXISTS answers (
