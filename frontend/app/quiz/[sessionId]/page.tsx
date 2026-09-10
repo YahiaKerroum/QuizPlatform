@@ -8,10 +8,13 @@ import { QuestionCard } from "@/components/quiz/QuestionCard";
 import { QuizProgress } from "@/components/quiz/QuizProgress";
 import { QuizTimer } from "@/components/quiz/QuizTimer";
 import { Button } from "@/components/ui/Button";
+import { QuizPageSkeleton } from "@/components/ui/Skeleton";
 import { Toast } from "@/components/ui/Toast";
 import { useQuiz } from "@/hooks/useQuiz";
 import { useTimer } from "@/hooks/useTimer";
-import type { SessionStartOut } from "@/lib/types";
+import type { QuestionOut, SessionStartOut } from "@/lib/types";
+
+const ANSWER_LETTERS = ["a", "b", "c", "d", "e", "f"] as const;
 
 export default function QuizPage() {
   const params = useParams<{ sessionId: string }>();
@@ -36,7 +39,7 @@ export default function QuizPage() {
     }
   }, [params.sessionId, router]);
 
-  if (!initialData) return null;
+  if (!initialData) return <QuizPageSkeleton />;
 
   return <QuizSessionView initialData={initialData} sessionId={params.sessionId} />;
 }
@@ -60,17 +63,37 @@ function QuizSessionView({
 
   useEffect(() => {
     if (quiz.state.done) {
-      if (quiz.state.predictedLevel) {
-        sessionStorage.setItem(
-          `level_${sessionId}`,
-          JSON.stringify({ predictedLevel: quiz.state.predictedLevel, confidence: quiz.state.confidence }),
-        );
-      }
       router.replace(`/result/${sessionId}`);
     }
-  }, [quiz.state.done, quiz.state.predictedLevel, quiz.state.confidence, router, sessionId]);
+  }, [quiz.state.done, router, sessionId]);
 
-  const { predictedLevel, confidence, isAdaptive } = quiz.state;
+  const { predictedLevel, confidence, isAdaptive, currentQuestion, selected, submitting } = quiz.state;
+
+  const availableLetters = ANSWER_LETTERS.filter((letter) =>
+    Boolean(
+      currentQuestion[`choice_${letter}` as keyof QuestionOut] ||
+        currentQuestion[`choice_${letter}_image_url` as keyof QuestionOut],
+    ),
+  );
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (submitting) return;
+
+      const index = Number(event.key) - 1;
+      if (Number.isInteger(index) && index >= 0 && index < availableLetters.length) {
+        quiz.selectAnswer(availableLetters[index]);
+        return;
+      }
+
+      if (event.key === "Enter" && selected) {
+        void quiz.confirmAnswer(Date.now() - quiz.questionRenderTime);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [availableLetters, submitting, selected, quiz]);
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -106,6 +129,9 @@ function QuizSessionView({
         disabled={quiz.state.submitting}
         onSelect={quiz.selectAnswer}
       />
+      <p className="mt-3 text-xs text-ink/45">
+        Press 1–{availableLetters.length} to answer, Enter to confirm
+      </p>
       {quiz.state.selected ? (
         <div className="mt-6 flex justify-end">
           <Button

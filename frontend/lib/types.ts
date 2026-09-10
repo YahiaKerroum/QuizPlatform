@@ -132,6 +132,8 @@ export interface ResultOut {
   accuracy: number;
   by_difficulty: Record<string, { total: number; correct: number; accuracy: number }>;
   by_question: QuestionResultOut[];
+  predicted_level: "beginner" | "intermediate" | "advanced" | null;
+  confidence: number | null;
 }
 
 export interface SessionHistoryOut {

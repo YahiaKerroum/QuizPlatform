@@ -7,8 +7,9 @@ import { StudentLogoutButton } from "@/components/auth/StudentLogoutButton";
 import { RichContent } from "@/components/content/RichContent";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ResultPageSkeleton } from "@/components/ui/Skeleton";
 import { Toast } from "@/components/ui/Toast";
-import api from "@/lib/api";
+import api, { summarizeApiError } from "@/lib/api";
 import type { ResultOut } from "@/lib/types";
 
 const LEVEL_COLORS = {
@@ -28,26 +29,15 @@ export default function ResultPage() {
   const router = useRouter();
   const [result, setResult] = useState<ResultOut | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [predictedLevel, setPredictedLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
-  const [confidence, setConfidence] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadResult() {
       try {
         const { data } = await api.get<ResultOut>(`/sessions/${params.sessionId}/result`);
         setResult(data);
-      } catch {
-        setError("Could not load the result page.");
+      } catch (error) {
+        setError(summarizeApiError(error, "Could not load the result page."));
       }
-    }
-
-    const raw = sessionStorage.getItem(`level_${params.sessionId}`);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as { predictedLevel: "beginner" | "intermediate" | "advanced"; confidence: number | null };
-        setPredictedLevel(parsed.predictedLevel);
-        setConfidence(parsed.confidence);
-      } catch { /* ignore malformed */ }
     }
 
     void loadResult();
@@ -61,7 +51,10 @@ export default function ResultPage() {
     );
   }
 
-  if (!result) return null;
+  if (!result) return <ResultPageSkeleton />;
+
+  const predictedLevel = result.predicted_level;
+  const confidence = result.confidence;
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
