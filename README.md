@@ -17,6 +17,14 @@ The instructions below follow the setup that was already verified locally.
 - Frontend: Next.js 14, React 18, Tailwind CSS
 - Auth: JWT
 
+## Project Structure
+
+- `frontend/` — Next.js 14 web application (student dashboard, quiz engine, admin portal)
+- `backend/` — FastAPI REST API, database service, and adaptive session orchestration
+- `ai/` — Active learning models (`ai/models/`), training scripts (`ai/training/`), dependencies, and research notebooks (`ai/research/`)
+- `data/` — Question bank CSV imports (`data/quizzes/`) and simulation fixtures (`data/simulations/`)
+- `docs/` — Feature specifications, logic plans, and implementation guides
+
 ## Prerequisites
 
 - Python 3.12 or newer
@@ -145,7 +153,7 @@ Admin access now uses an email allowlist from the backend environment:
 After both servers are running:
 
 1. Open `http://127.0.0.1:3000/admin/import`
-2. Upload `sanfoundry_sample_10_quizzes.csv`
+2. Upload `data/quizzes/sanfoundry_sample_10_quizzes.csv`
 3. Wait for the success message
 
 That sample contains 10 quizzes and is the quickest dataset for local testing.
@@ -210,7 +218,7 @@ You can import the sample CSV directly through the backend:
 curl -X POST "http://127.0.0.1:8000/admin/import" `
   -H "accept: application/json" `
   -H "Content-Type: multipart/form-data" `
-  -F "file=@sanfoundry_sample_10_quizzes.csv"
+  -F "file=@data/quizzes/sanfoundry_sample_10_quizzes.csv"
 ```
 
 ## Optional: Create Synthetic Students
@@ -279,4 +287,4 @@ Set-ExecutionPolicy -Scope Process Bypass
 - Admin routes are protected by an env-backed allowed-email list.
 - The quickest verified local workflow is PostgreSQL + `backend/schema.sql` + sample CSV import.
 - Modules and quiz assignment are managed from `/admin/catalog`.
-- The project includes the larger `sanfoundry_all_quiz.csv`, but `sanfoundry_sample_10_quizzes.csv` is the recommended first import after cloning.
+- The project includes the larger `data/quizzes/sanfoundry_all_quiz.csv`, but `data/quizzes/sanfoundry_sample_10_quizzes.csv` is the recommended first import after cloning.

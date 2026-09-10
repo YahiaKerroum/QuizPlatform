@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
 
 # ML model (service falls back to rule-based selection if absent)
-COPY ["ML NOTEBOOKS/models/best_model_single_module.pkl", "ML NOTEBOOKS/models/best_model_single_module.pkl"]
+COPY ai/models/best_model_single_module.pkl ai/models/best_model_single_module.pkl
 
 EXPOSE 8000
 

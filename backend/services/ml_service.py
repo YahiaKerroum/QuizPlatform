@@ -19,6 +19,7 @@ Indices [0-14] are identical to the previous 27-feature model so
 select_next_question / should_stop / rule-based fallback need no index changes.
 """
 
+import os
 import pickle
 import random
 import logging
@@ -30,7 +31,25 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # -- Model loading -------------------------------------------------------------
-_MODEL_PATH = Path(__file__).parent.parent.parent / "ML NOTEBOOKS" / "models" / "best_model_single_module.pkl"
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_DEFAULT_MODEL_PATH = _REPO_ROOT / "ai" / "models" / "best_model_single_module.pkl"
+_LEGACY_MODEL_PATH = _REPO_ROOT / "ML NOTEBOOKS" / "models" / "best_model_single_module.pkl"
+
+
+def _get_model_path() -> Path:
+    env_path = os.getenv("MODEL_PATH")
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
+    if _DEFAULT_MODEL_PATH.exists():
+        return _DEFAULT_MODEL_PATH
+    if _LEGACY_MODEL_PATH.exists():
+        return _LEGACY_MODEL_PATH
+    return _DEFAULT_MODEL_PATH
+
+
+_MODEL_PATH = _get_model_path()
 _model = None
 
 
@@ -38,15 +57,16 @@ def _load_model():
     global _model
     if _model is not None:
         return _model
-    if not _MODEL_PATH.exists():
-        logger.warning("ML model not found at %s -- falling back to rule-based prediction.", _MODEL_PATH)
+    model_path = _get_model_path()
+    if not model_path.exists():
+        logger.warning("ML model not found at %s -- falling back to rule-based prediction.", model_path)
         return None
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            bundle = pickle.load(open(_MODEL_PATH, "rb"))
+            bundle = pickle.load(open(model_path, "rb"))
         _model = bundle.get("model") if isinstance(bundle, dict) else bundle
-        logger.info("ML model loaded from %s", _MODEL_PATH)
+        logger.info("ML model loaded from %s", model_path)
     except Exception as exc:
         logger.error("Failed to load ML model: %s", exc)
     return _model

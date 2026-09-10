@@ -325,7 +325,8 @@ check("beginner",
 
 
 # -- Save ----------------------------------------------------------------------
-out = Path("ML NOTEBOOKS/models/best_model_single_module.pkl")
+out = Path(__file__).resolve().parent.parent / "models" / "best_model_single_module.pkl"
+out.parent.mkdir(parents=True, exist_ok=True)
 bundle = {
     "model":          calibrated_clf,
     "approach":       "single_module_catboost_calibrated_v4",

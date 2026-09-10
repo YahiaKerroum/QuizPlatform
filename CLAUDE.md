@@ -37,7 +37,7 @@ Two apps: `backend/` (FastAPI + async postgrest → Supabase) and `frontend/` (N
 - **`backend/auth.py`** — JWT creation/verification (7-day tokens, `HS256`). Admin access is controlled by `ADMIN_ALLOWED_EMAILS` env var (comma-separated). `get_current_student` and `require_admin` are FastAPI dependencies.
 - **`backend/routers/`** — Thin routers that delegate to services. `admin.py` routes are currently unauthenticated in router wiring.
 - **`backend/services/session_service.py`** — Core quiz flow. Non-adaptive mode enforces strict sequential `question_number`; adaptive mode accepts any unanswered question number. `response_time_ms` must be 1–599999.
-- **`backend/services/ml_service.py`** — Adaptive question selection. Loads `ML NOTEBOOKS/models/best_model_single_module.pkl` lazily (falls back to rule-based if missing). Exposes `compute_features` (returns a `(1, 21)` ndarray), `predict_level`, `select_next_question`, and `should_stop`. The 21-feature vector order is fixed — changing it breaks the model.
+- **`backend/services/ml_service.py`** — Adaptive question selection. Loads `ai/models/best_model_single_module.pkl` lazily (falls back to rule-based if missing). Exposes `compute_features` (returns a `(1, 21)` ndarray), `predict_level`, `select_next_question`, and `should_stop`. The 21-feature vector order is fixed — changing it breaks the model.
 
 ### Frontend
 

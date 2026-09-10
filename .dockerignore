@@ -11,7 +11,10 @@ backend/.env.*
 
 # Not needed in the image
 frontend
-FINAL_SUBMISSION
+data
+docs
+ai/research
+ai/training
 *.csv
 .git
 backend/.claude
