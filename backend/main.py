@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -9,9 +11,19 @@ from .routers.sessions import router as sessions_router
 
 app = FastAPI(title="Adaptive Quiz Platform API")
 
+_DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "https://quiz-platform-ie9w.vercel.app",
+]
+_cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
+_cors_allowed_origins = [origin.strip() for origin in _cors_env.split(",") if origin.strip()] or _DEFAULT_CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001", "https://quiz-platform-ie9w.vercel.app"],
+    allow_origins=_cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
