@@ -7,12 +7,28 @@ from postgrest import AsyncPostgrestClient
 
 from ..schemas import AnswerIn, AnswerOut, QuestionOut, QuestionResultOut, ResultOut, SessionHistoryOut, SessionStartOut
 from . import ml_service
+from .shuffle import LETTERS, display_to_original_letter, shuffled_letter_order
 
 VALID_CHOICES = {"a", "b", "c", "d", "e", "f"}
 
 
-def _serialize_question(question: dict) -> QuestionOut:
-    return QuestionOut.model_validate(question)
+def _serialize_question(question: dict, session_id: str) -> QuestionOut:
+    """Serialize a question for display, with its choices shown in a
+    per-session shuffled order so the correct answer isn't always in the same
+    slot. The underlying stored letters are never exposed to the client.
+    """
+    order = shuffled_letter_order(question, session_id, int(question["question_number"]))
+    fields: dict[str, str | None] = {}
+    for display_letter, original_letter in zip(LETTERS, order):
+        fields[f"choice_{display_letter}"] = question.get(f"choice_{original_letter}")
+        fields[f"choice_{display_letter}_image_url"] = question.get(f"choice_{original_letter}_image_url")
+
+    return QuestionOut(
+        question_number=int(question["question_number"]),
+        question_text=question["question_text"],
+        question_image_url=question.get("question_image_url"),
+        **fields,
+    )
 
 
 def _normalize_choice(choice: str) -> str:
@@ -99,7 +115,7 @@ async def create_session(
 
     return SessionStartOut(
         session_id=session["id"],
-        question=_serialize_question(first_question),
+        question=_serialize_question(first_question, str(session["id"])),
         question_number=int(first_question["question_number"]),
         total=int(total),
         is_adaptive=adaptive,
@@ -151,7 +167,14 @@ async def submit_answer(
     if question is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found.")
 
-    chosen_answer = _normalize_choice(answer_in.chosen_answer)
+    chosen_display_letter = _normalize_choice(answer_in.chosen_answer)
+    try:
+        chosen_answer = display_to_original_letter(
+            question, str(session_id), int(question["question_number"]), chosen_display_letter
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     await db.table("answers").insert({
         "session_id": str(session_id),
         "quiz_id": session["quiz_id"],
@@ -193,7 +216,7 @@ async def submit_answer(
 
     return AnswerOut(
         done=False,
-        question=_serialize_question(next_question),
+        question=_serialize_question(next_question, str(session_id)),
         question_number=int(next_question["question_number"]),
         total=int(total),
     )
@@ -283,7 +306,7 @@ async def _submit_adaptive(
 
     return AnswerOut(
         done=False,
-        question=_serialize_question(next_question),
+        question=_serialize_question(next_question, str(session_id)),
         question_number=int(next_question["question_number"]),
         total=total,
         predicted_level=predicted_level,
