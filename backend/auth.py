@@ -112,15 +112,27 @@ async def get_student_db(
     return get_user_db(credentials.credentials)
 
 
-def require_admin(
+async def require_admin(
     student: dict = Depends(get_current_student),
 ) -> dict:
-    if not ADMIN_ALLOWED_EMAILS:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access is not configured.",
-        )
-    if not is_admin_email(student["email"]):
+    """Admin access is granted by profiles.role == 'admin', the system of
+    record for roles (see /admin/profiles). ADMIN_ALLOWED_EMAILS is kept only
+    as a bootstrap allow-list -- without it nobody could ever be promoted to
+    admin, since promoting requires this same dependency.
+    """
+    if is_admin_email(student["email"]):
+        return student
+
+    db = get_admin_db()
+    profile = (
+        await db.table("profiles")
+        .select("role")
+        .eq("email", student["email"].lower().strip())
+        .maybe_single()
+        .execute()
+    )
+    role = profile.data.get("role") if profile is not None and profile.data else None
+    if role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account is not allowed to access the admin portal.",

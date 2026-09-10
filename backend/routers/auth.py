@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from postgrest import AsyncPostgrestClient
 
-from ..auth import get_current_student, is_admin_email, require_admin
+from ..auth import require_admin
 from ..database import get_db
 from ..schemas import AdminAccessOut, LoginIn, RegisterIn, TokenOut
 from ..supabase_auth import sign_in_with_password, sign_up_with_password
