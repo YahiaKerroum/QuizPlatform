@@ -38,7 +38,7 @@ Two apps: `backend/` (FastAPI + async postgrest → Supabase) and `frontend/` (N
 
 - **`backend/main.py`** — FastAPI app, mounts four routers under `/auth`, `/quizzes`, `/sessions`, `/admin`.
 - **`backend/database.py`** — Loads `backend/.env` by explicit path (not CWD). Builds an `AsyncPostgrestClient` from `SUPABASE_URL` + `SUPABASE_SECRET_KEY`. Hard-fails on startup if either is missing.
-- **`backend/auth.py`** — JWT creation/verification (7-day tokens, `HS256`). Admin access is gated on the `profiles.role` column; `ADMIN_ALLOWED_EMAILS` (comma-separated env var) is only a bootstrap allowlist for granting the first admin role. `get_current_student` and `require_admin` are FastAPI dependencies.
+- **`backend/auth.py`** — No local JWT minting/verification; tokens are issued and verified entirely by Supabase Auth (`backend/supabase_auth.py` calls `.auth.sign_up`/`.auth.sign_in_with_password`/`.auth.get_user`). Admin access is gated on the `profiles.role` column; `ADMIN_ALLOWED_EMAILS` (comma-separated env var) is only a bootstrap allowlist for granting the first admin role. `get_current_student` and `require_admin` are FastAPI dependencies.
 - **`backend/routers/`** — Thin routers that delegate to services. `admin.py` requires `require_admin` at router level (`dependencies=[Depends(require_admin)]`).
 - **`backend/services/session_service.py`** — Core quiz flow. Non-adaptive mode enforces strict sequential `question_number`; adaptive mode accepts any unanswered question number. `response_time_ms` must be 1–599999.
 - **`backend/services/ml_service.py`** — Adaptive question selection. Loads `ai/models/best_model_single_module.pkl` lazily (falls back to rule-based if missing). Exposes `compute_features` (returns a `(1, 21)` ndarray), `predict_level`, `select_next_question`, and `should_stop`. The 21-feature vector order is fixed — changing it breaks the model.
@@ -66,11 +66,17 @@ The adaptive quiz flow:
 - Import (`ON CONFLICT DO NOTHING`) skips duplicates on `(quiz_id, question_number)` — re-importing the same CSV is safe but won't update.
 - Once a quiz has answer history, questions cannot be added/removed — only content can change.
 - Import requires non-empty `choice_a`, `choice_b`, and `correct_answer` in `{a..f}` pointing to a non-empty choice.
-- `DATABASE_URL` `postgres://` and `postgresql://` prefixes are normalized to `postgresql+asyncpg://` automatically.
+- There is no `DATABASE_URL`/SQLAlchemy path anywhere in the backend — all persistence goes through PostgREST (`AsyncPostgrestClient`) against Supabase. `backend/.env.example` historically listed a `DATABASE_URL` var that nothing read; it's been removed.
+
+### Setting up a fresh Supabase project
+
+`backend/schema.sql` is the single bootstrap file: run it once in the new project's SQL editor (or `psql -d <db> -f backend/schema.sql`) and every table, index, and RLS policy the backend expects exists. It's idempotent, so re-running it is harmless. `backend/migrations/` is only a historical record of deltas against the original project — a fresh one doesn't need any of those files.
 
 ### Env Files
 
 | File | Key vars |
 |------|----------|
-| `backend/.env` | `DATABASE_URL`, `SECRET_KEY`, `ADMIN_ALLOWED_EMAILS`, `CORS_ALLOWED_ORIGINS`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` |
-| `frontend/.env.local` | `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000` |
+| `backend/.env` | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `ADMIN_ALLOWED_EMAILS`, `CORS_ALLOWED_ORIGINS` |
+| `frontend/.env.local` | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |
+
+`SUPABASE_PUBLISHABLE_KEY`/`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` come from the new project's API settings. The publishable key is safe in frontend code; the secret key is backend-only and bypasses RLS (`database.py:get_admin_db`) — never expose it to the frontend. In the new project's Auth settings, disabling "Confirm email" makes local registration/login work immediately (`supabase_auth.py:sign_up_with_password` raises if no session comes back, which is what happens when email confirmation is required and the user hasn't clicked the link yet).
