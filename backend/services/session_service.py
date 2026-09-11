@@ -5,8 +5,9 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from postgrest import AsyncPostgrestClient
 
+from ..database import get_admin_db
 from ..schemas import AnswerIn, AnswerOut, QuestionOut, QuestionResultOut, ResultOut, SessionHistoryOut, SessionStartOut
-from . import ml_service
+from . import elo_service, ml_service
 from .shuffle import LETTERS, display_to_original_letter, shuffled_letter_order
 
 VALID_CHOICES = {"a", "b", "c", "d", "e", "f"}
@@ -47,6 +48,74 @@ def _choice_text(question: dict, choice: str) -> str | None:
 
 def _choice_image_url(question: dict, choice: str) -> str | None:
     return question.get(f"choice_{choice}_image_url")
+
+
+async def _get_quiz_module_id(db: AsyncPostgrestClient, quiz_id: str) -> str | None:
+    quiz_resp = await db.table("quizzes").select("module_id").eq("id", quiz_id).maybe_single().execute()
+    return quiz_resp.data.get("module_id") if quiz_resp and quiz_resp.data else None
+
+
+async def _update_elo_ratings(
+    student_id: str,
+    module_id: str | None,
+    quiz_id: str,
+    question_number: int,
+    correct: bool,
+) -> None:
+    """Elo update for the student (per module) and the item just answered.
+
+    Runs on the service-role client -- student_ratings/item_ratings are
+    read-only to students via RLS, written only here. Ratings are a
+    supplementary signal, not required for grading or selection, so this
+    never blocks or fails the answer submission itself.
+    """
+    if module_id is None:
+        return
+
+    db = get_admin_db()
+
+    student_resp = (
+        await db.table("student_ratings")
+        .select("rating,n_answers")
+        .eq("student_id", student_id)
+        .eq("module_id", module_id)
+        .maybe_single()
+        .execute()
+    )
+    student_row = student_resp.data if student_resp else None
+    student_rating = student_row["rating"] if student_row else elo_service.DEFAULT_RATING
+    student_n = student_row["n_answers"] if student_row else 0
+
+    item_resp = (
+        await db.table("item_ratings")
+        .select("rating,n_answers")
+        .eq("quiz_id", quiz_id)
+        .eq("question_number", question_number)
+        .maybe_single()
+        .execute()
+    )
+    item_row = item_resp.data if item_resp else None
+    item_rating = item_row["rating"] if item_row else elo_service.DEFAULT_RATING
+    item_n = item_row["n_answers"] if item_row else 0
+
+    new_student_rating, new_item_rating = elo_service.update_ratings(student_rating, item_rating, correct)
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.table("student_ratings").upsert({
+        "student_id": student_id,
+        "module_id": module_id,
+        "rating": new_student_rating,
+        "n_answers": student_n + 1,
+        "updated_at": now,
+    }, on_conflict="student_id,module_id").execute()
+
+    await db.table("item_ratings").upsert({
+        "quiz_id": quiz_id,
+        "question_number": question_number,
+        "rating": new_item_rating,
+        "n_answers": item_n + 1,
+        "updated_at": now,
+    }, on_conflict="quiz_id,question_number").execute()
 
 
 async def _get_session_for_student(
@@ -175,14 +244,20 @@ async def submit_answer(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    is_correct = chosen_answer == question["correct_answer"]
     await db.table("answers").insert({
         "session_id": str(session_id),
         "quiz_id": session["quiz_id"],
         "question_number": int(question["question_number"]),
         "chosen_answer": chosen_answer,
-        "is_correct": chosen_answer == question["correct_answer"],
+        "is_correct": is_correct,
         "response_time_ms": answer_in.response_time_ms,
     }).execute()
+
+    module_id = await _get_quiz_module_id(db, session["quiz_id"])
+    await _update_elo_ratings(
+        str(session["student_id"]), module_id, session["quiz_id"], int(question["question_number"]), is_correct
+    )
 
     answered_nums.add(answer_in.question_number)
 
@@ -195,7 +270,7 @@ async def submit_answer(
     total = len(total_resp.data or [])
 
     if session.get("is_adaptive"):
-        return await _submit_adaptive(db, session, session_id, total)
+        return await _submit_adaptive(db, session, session_id, total, module_id)
 
     next_num = len(answered_nums) + 1
     next_q_resp = (
@@ -227,6 +302,7 @@ async def _submit_adaptive(
     session: dict,
     session_id: UUID,
     total: int,
+    quiz_module: str | None,
 ) -> AnswerOut:
     answers_resp = (
         await db.table("answers")
@@ -251,14 +327,6 @@ async def _submit_adaptive(
     difficulty_list = [q_by_num.get(int(a["question_number"]), {}).get("difficulty") for a in answers]
     time_ms_list = [int(a["response_time_ms"]) for a in answers]
 
-    quiz_resp = (
-        await db.table("quizzes")
-        .select("module_id")
-        .eq("id", session["quiz_id"])
-        .maybe_single()
-        .execute()
-    )
-    quiz_module = quiz_resp.data.get("module_id") if quiz_resp and quiz_resp.data else None
     module_list = [quiz_module] * n_answered
 
     features = ml_service.compute_features(is_correct_list, difficulty_list, time_ms_list, module_list)
